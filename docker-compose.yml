@@ -1,0 +1,23 @@
+services:
+  hydro_portal:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    container_name: hydro_portal
+    ports:
+      - "3001:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules # Anonymous volume to preserve container node_modules
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+    # Command to run npm install on start if modules are missing (useful for first run)
+    command: sh -c "npm install --legacy-peer-deps && npm run dev"
+    networks:
+      - timeio-network
+
+networks:
+  timeio-network:
+    external: true
+    name: water_dp_water_dp_network # Connect to existing backend network if needed, or use default bridge
