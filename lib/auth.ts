@@ -1,7 +1,16 @@
 
-import NextAuth from "next-auth"
+import NextAuth, { User } from "next-auth"
 import Credentials from "next-auth/providers/credentials"
-import axios from "axios"
+import axios, { AxiosError } from "axios"
+
+// Helper to decode JWT payload safely
+function parseJwt(token: string) {
+    try {
+        return JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+    } catch (e) {
+        return null;
+    }
+}
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
     providers: [
@@ -29,17 +38,28 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     })
 
                     if (response.data && response.data.access_token) {
+                        const token = response.data.access_token;
+                        const decoded = parseJwt(token);
+                        // Use 'sub' from JWT as ID, fallback to '1' if missing (unlikely)
+                        const userId = decoded?.sub || "1";
+
                         return {
-                            id: "1", // Placeholder
+                            id: userId,
                             name: credentials.username as string,
                             email: "",
-                            accessToken: response.data.access_token,
+                            accessToken: token,
                         }
                     }
 
                     return null
-                } catch (error: any) {
-                    console.error("Auth error:", error.response?.data || error.message)
+                } catch (error: unknown) {
+                    let msg = "Auth error";
+                    if (axios.isAxiosError(error)) {
+                        msg = error.response?.data || error.message;
+                    } else if (error instanceof Error) {
+                        msg = error.message;
+                    }
+                    console.error("Auth error:", msg);
                     return null
                 }
             }

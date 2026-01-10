@@ -24,13 +24,13 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ id: 
 
     // Members
     const [members, setMembers] = useState<any[]>([]);
-    const [newMemberEmail, setNewMemberEmail] = useState("");
+    const [newMemberUsername, setNewMemberUsername] = useState("");
     const [addingMember, setAddingMember] = useState(false);
 
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
     useEffect(() => {
-        console.log("Settings Page Session:", session);
+        // console.log("Settings Page Session:", session);
         if (session?.accessToken && id) {
             fetchProject();
             fetchMembers();
@@ -76,10 +76,10 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ id: 
             }, {
                 headers: { Authorization: `Bearer ${session?.accessToken}` }
             });
-            alert("Project updated successfully");
+            // alert("Project updated successfully");
             router.refresh();
         } catch (error) {
-            alert("Failed to update project");
+            console.error("Failed to update project", error);
         } finally {
             setSaving(false);
         }
@@ -95,22 +95,19 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ id: 
             // If backend doesn't support email lookup, we might need to change this.
             // Assuming for now backend can handle it or we mock the ID lookup. 
             // Actually, water_dp `ProjectMemberCreate` is: `user_id: UUID`, `role: str`.
-            // User needs to know the UUID. This is a UX gap. 
+            // But we can resolve username to ID if backend supports it or logic handles it.
 
-            // For now, let's assume the user enters a UUID for simplicity, 
-            // OR we'd need a user search endpoint which might not exist publically.
             await axios.post(`${apiUrl}/projects/${id}/members`, {
-                username: newMemberEmail, // Temporarily assuming INPUT is UUID for MVP
+                username: newMemberUsername,
                 role: "viewer"
             }, {
                 headers: { Authorization: `Bearer ${session?.accessToken}` }
             });
-            setNewMemberEmail("");
+            setNewMemberUsername("");
             fetchMembers();
-            alert("Member added successfully");
         } catch (error: any) {
             const msg = error.response?.data?.detail || "Failed to add member";
-            alert(msg);
+            console.error(msg);
         } finally {
             setAddingMember(false);
         }
@@ -127,7 +124,7 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ id: 
             fetchMembers();
         } catch (error: any) {
             const msg = error.response?.data?.detail || "Failed to update role";
-            alert(msg);
+            console.error(msg);
         }
     };
 
@@ -140,7 +137,7 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ id: 
             fetchMembers();
         } catch (error: any) {
             const msg = error.response?.data?.detail || "Failed to remove member";
-            alert(msg);
+            console.error(msg);
         }
     };
 
@@ -197,8 +194,8 @@ export default function ProjectSettingsPage({ params }: { params: Promise<{ id: 
                     <form onSubmit={handleAddMember} className="flex gap-4">
                         <input
                             type="text"
-                            value={newMemberEmail}
-                            onChange={(e) => setNewMemberEmail(e.target.value)}
+                            value={newMemberUsername}
+                            onChange={(e) => setNewMemberUsername(e.target.value)}
                             placeholder="Enter username to add"
                             className="flex-1 px-4 py-2 bg-black/20 border border-white/10 rounded-lg text-white focus:outline-none focus:border-hydro-primary"
                         />

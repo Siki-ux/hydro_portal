@@ -1,9 +1,10 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
-import { format } from "date-fns";
+import { useEffect, useState, useRef } from "react";
+// Remove unused format import
 import TimeSeriesChart from "./TimeSeriesChart";
+import { X, Trash2, Edit, Map, FileText } from "lucide-react";
 
 // Helper to fetch data
 async function getDataPoints(stationId: number, token: string) {
@@ -40,6 +41,7 @@ export default function SensorDetailModal({
 }: SensorDetailModalProps) {
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     useEffect(() => {
         if (isOpen && sensor) {
@@ -60,13 +62,16 @@ export default function SensorDetailModal({
     if (!isOpen || !sensor) return null;
 
     const handleDelete = () => {
-        if (confirm("Are you sure you want to delete this sensor?")) {
-            // Use the station_id string property as the ID for deletion if that's what backend expects, 
-            // or the numeric ID? Backend DELETE /projects/.../things/{sensor_id} expects string.
-            // Let's use the one displayed as ID.
-            onDelete(String(sensor.id));
-            onClose();
-        }
+        setIsDeleting(true);
+    };
+
+    const confirmDelete = () => {
+        onDelete(String(sensor.id));
+        onClose();
+    };
+
+    const cancelDelete = () => {
+        setIsDeleting(false);
     };
 
     return (
@@ -82,20 +87,45 @@ export default function SensorDetailModal({
                     </div>
 
                     <div className="flex gap-2">
-                        <button
-                            onClick={() => onEdit(sensor)}
-                            className="px-3 py-1 bg-white/10 hover:bg-white/20 rounded text-sm transition-colors text-white"
-                        >
-                            ✏️ Edit
-                        </button>
-                        <button onClick={handleDelete} className="px-3 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded text-sm transition-colors border border-red-500/20">
-                            🗑️ Delete
-                        </button>
+                        {isDeleting ? (
+                            <>
+                                <span className="text-sm text-red-400 self-center mr-2">Confirm delete?</span>
+                                <button
+                                    onClick={confirmDelete}
+                                    className="px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded text-sm transition-colors"
+                                >
+                                    Yes
+                                </button>
+                                <button
+                                    onClick={cancelDelete}
+                                    className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded text-sm transition-colors"
+                                >
+                                    No
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                <button
+                                    onClick={() => onEdit(sensor)}
+                                    className="flex items-center gap-1 px-3 py-1 bg-white/10 hover:bg-white/20 rounded text-sm transition-colors text-white"
+                                >
+                                    <Edit className="w-3 h-3" />
+                                    Edit
+                                </button>
+                                <button
+                                    onClick={handleDelete}
+                                    className="flex items-center gap-1 px-3 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded text-sm transition-colors border border-red-500/20"
+                                >
+                                    <Trash2 className="w-3 h-3" />
+                                    Delete
+                                </button>
+                            </>
+                        )}
                         <button
                             onClick={onClose}
                             className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/70 ml-2"
                         >
-                            ✕
+                            <X className="w-5 h-5" />
                         </button>
                     </div>
                 </div>
@@ -104,7 +134,7 @@ export default function SensorDetailModal({
                     {/* Metadata Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-4">
-                            <h3 className="text-sm font-semibold text-hydro-primary uppercase tracking-wider">Metdata</h3>
+                            <h3 className="text-sm font-semibold text-hydro-primary uppercase tracking-wider">Metadata</h3>
                             <div className="grid grid-cols-2 gap-4 text-sm">
                                 <div className="bg-white/5 p-3 rounded-lg border border-white/5">
                                     <div className="text-white/40 mb-1">Status</div>
@@ -133,7 +163,7 @@ export default function SensorDetailModal({
                             <div className="flex-1 min-h-[200px] bg-white/5 rounded-xl border border-white/10 flex items-center justify-center relative overflow-hidden group">
                                 <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-20"></div>
                                 <div className="text-center z-10">
-                                    <div className="text-3xl mb-2">🗺️</div>
+                                    <div className="text-3xl mb-2 flex justify-center"><Map className="w-8 h-8 opacity-50" /></div>
                                     <div className="text-white/50 text-sm">Interactive Map Coming Soon</div>
                                     <div className="text-white/30 text-xs mt-1">
                                         {sensor.latitude}, {sensor.longitude}

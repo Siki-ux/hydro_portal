@@ -110,7 +110,7 @@ export default function SensorFormModal({
             });
         }
         setError("");
-    }, [initialData, mode, isOpen]);
+    }, [initialData, mode, isOpen, defaultType]);
 
     if (!isOpen) return null;
 

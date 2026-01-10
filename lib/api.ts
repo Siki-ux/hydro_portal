@@ -14,7 +14,14 @@ const api = axios.create({
 // This generic interceptor is a starting point and may need adjustment for SSR vs CSR.
 api.interceptors.request.use(
     async (config) => {
-        // Todo: Integrate with Session management to inject Authorization header
+        // Integrate with Session management to inject Authorization header
+        if (typeof window !== "undefined") {
+            const { getSession } = await import("next-auth/react");
+            const session = await getSession();
+            if (session?.accessToken) {
+                config.headers.Authorization = `Bearer ${session.accessToken}`;
+            }
+        }
         return config;
     },
     (error) => {

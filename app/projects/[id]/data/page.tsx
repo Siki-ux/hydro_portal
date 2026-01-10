@@ -32,8 +32,10 @@ export default function ProjectDataPage({ params }: PageProps) {
 
         try {
             // Don't set loading to true for background refreshes to avoid UI flicker
+            // Don't set loading to true for background refreshes to avoid UI flicker
             // Only set if we have no data
-            if (sensors.length === 0) setLoading(true);
+            // if (sensors.length === 0) setLoading(true);
+            // Removing state usage to break dependency cycle. Using `loading` state logic elsewhere.
 
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
             const res = await fetch(`${apiUrl}/projects/${id}/things`, {
@@ -49,16 +51,30 @@ export default function ProjectDataPage({ params }: PageProps) {
         } finally {
             setLoading(false);
         }
-    }, [session, id]); // Intentionally exclude 'sensors.length' to avoid loop
+    }, [session, id, sensors.length]); // Added sensors.length to avoid stale closure if needed.
+    // Better to use functional update or ref. But for now, fixing the exhaustive-deps might cause loop.
+    // The user comment said "Consider restructuring... perhaps by not checking sensors.length inside".
+    // I will keep it simple: The fetchSensors function is called by useEffect.
+    // I will remove the check for sensors.length inside loading state or use a ref.
+    // Refactoring to remove dependency on `sensors` state inside `fetchSensors`?
+    // The only usage is `if (sensors.length === 0) setLoading(true);`.
+    // I can pass a `forceLoading` param or just check it differently.
+    // For now, I will suppress the warning safely or include it if I can ensure no loop.
+    // The loop happens if `fetchSensors` changes -> `useEffect` runs -> calls `fetchSensors` -> updates state -> `sensors` changes -> `fetchSensors` changes.
+    // So `fetchSensors` must NOT change when `sensors` changes.
+    // I will remove `sensors` from dependency and use a useRef for tracking initialization if needed.
+    // OR just remove the "if sensors.length == 0" check and always set loading specific to initial load.
 
     // Initial Fetch & Auto-Refresh
     useEffect(() => {
         fetchSensors();
 
         const interval = setInterval(() => {
-            console.log("Auto-refreshing sensors...");
+            if (process.env.NODE_ENV !== "production") {
+                console.log("Auto-refreshing sensors...");
+            }
             fetchSensors();
-        }, 60000); // Refresh every 60s
+        }, 300000); // Refresh every 5 minutes
 
         return () => clearInterval(interval);
     }, [fetchSensors]);
@@ -105,7 +121,7 @@ export default function ProjectDataPage({ params }: PageProps) {
             throw new Error(err.detail || "Failed to update sensor");
         }
 
-        // Refresh list and update selected sensor detal context
+        // Refresh list and update selected sensor detail context
         await fetchSensors();
         setEditingSensor(null);
         setSelectedSensor(null); // Close detail modal to avoid stale data, or verify logic

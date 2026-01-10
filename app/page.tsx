@@ -1,4 +1,3 @@
-import { Button } from "@/components/ui/button"; // Placeholder import, assuming we will add it
 import { WaterBackground } from "@/components/WaterBackground";
 import Link from "next/link";
 

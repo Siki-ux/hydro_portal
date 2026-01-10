@@ -2,12 +2,10 @@
 
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
-import { LogOut, User, Menu } from "lucide-react";
-import { useState } from "react";
+import { LogOut, User } from "lucide-react";
 
 export function AppHeader() {
     const { data: session } = useSession();
-    const [isMenuOpen, setIsMenuOpen] = useState(false);
 
     return (
         <header className="fixed top-0 left-0 right-0 h-16 bg-black/40 backdrop-blur-md border-b border-white/10 z-50 flex items-center justify-between px-6">

@@ -47,7 +47,6 @@ We use a modern, performance-oriented stack to ensure a premium user experience 
     -   *Recommendation*: MapLibre for vector tiles and performance, or Leaflet for simplicity with WMS. Given the "Premium" requirement, **MapLibre** is better for smooth vector interactions.
 -   **Charts**: [Recharts](https://recharts.org/) or [Nivo](https://nivo.rocks/).
     -   SVG/Canvas based, highly customizable.
-    -   SVG/Canvas based, highly customizable.
 -   **Auth**: [NextAuth.js](https://next-auth.js.org/) (Secure authentication with Keycloak Provider).
     -   Handles session management, token refreshing, and server-side protection.
 

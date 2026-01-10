@@ -6,7 +6,7 @@ services:
       target: dev
     container_name: hydro_portal
     ports:
-      - "3001:3002"
+      - "3001:3000"
     volumes:
       - .:/app
       - /app/node_modules # Anonymous volume to preserve container node_modules
