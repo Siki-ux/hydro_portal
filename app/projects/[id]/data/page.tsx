@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -6,8 +5,12 @@ import { useSession } from "next-auth/react";
 import React from "react";
 import SensorList from "@/components/data/SensorList";
 import SensorDetailModal from "@/components/data/SensorDetailModal";
-import SensorFormModal from "@/components/data/SensorFormModal";
+import SensorFormModal from "@/components/data/SensorFormModal"; // Keeping for Edit
+import SensorLinkModal from "@/components/data/SensorLinkModal"; // NEW
 import DataUploadModal from "@/components/data/DataUploadModal";
+import DatasourceList from "@/components/data/DatasourceList";
+import DatasourceFormModal from "@/components/data/DatasourceFormModal";
+import QueryModal from "@/components/data/QueryModal";
 
 interface PageProps {
     params: Promise<{ id: string }>;
@@ -22,21 +25,25 @@ export default function ProjectDataPage({ params }: PageProps) {
 
     // Modal States
     const [selectedSensor, setSelectedSensor] = useState<any | null>(null);
-    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [isLinkModalOpen, setIsLinkModalOpen] = useState(false); // Changed from isAddModalOpen
     const [editingSensor, setEditingSensor] = useState<any | null>(null);
-    const [activeTab, setActiveTab] = useState<"sensors" | "datasets">("sensors");
+    const [activeTab, setActiveTab] = useState<"sensors" | "datasets" | "datasources">("sensors");
+
+    // Datasource State
+    const [datasources, setDatasources] = useState<any[]>([]);
+    const [isDatasourceModalOpen, setIsDatasourceModalOpen] = useState(false);
+    const [editingDatasource, setEditingDatasource] = useState<any | null>(null);
+
+    // Query State
+    const [queryModalOpen, setQueryModalOpen] = useState(false);
+    const [queryDatasource, setQueryDatasource] = useState<any | null>(null);
+
 
     // Fetch Sensors Function
     const fetchSensors = useCallback(async () => {
         if (!session?.accessToken || !id) return;
 
         try {
-            // Don't set loading to true for background refreshes to avoid UI flicker
-            // Don't set loading to true for background refreshes to avoid UI flicker
-            // Only set if we have no data
-            // if (sensors.length === 0) setLoading(true);
-            // Removing state usage to break dependency cycle. Using `loading` state logic elsewhere.
-
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
             const res = await fetch(`${apiUrl}/projects/${id}/things`, {
                 headers: { Authorization: `Bearer ${session.accessToken}` }
@@ -49,56 +56,67 @@ export default function ProjectDataPage({ params }: PageProps) {
         } catch (err) {
             console.error("Failed to fetch sensors", err);
         } finally {
-            setLoading(false);
+            if (activeTab === "sensors" || activeTab === "datasets") {
+                setLoading(false);
+            }
         }
-    }, [session, id, sensors.length]); // Added sensors.length to avoid stale closure if needed.
-    // Better to use functional update or ref. But for now, fixing the exhaustive-deps might cause loop.
-    // The user comment said "Consider restructuring... perhaps by not checking sensors.length inside".
-    // I will keep it simple: The fetchSensors function is called by useEffect.
-    // I will remove the check for sensors.length inside loading state or use a ref.
-    // Refactoring to remove dependency on `sensors` state inside `fetchSensors`?
-    // The only usage is `if (sensors.length === 0) setLoading(true);`.
-    // I can pass a `forceLoading` param or just check it differently.
-    // For now, I will suppress the warning safely or include it if I can ensure no loop.
-    // The loop happens if `fetchSensors` changes -> `useEffect` runs -> calls `fetchSensors` -> updates state -> `sensors` changes -> `fetchSensors` changes.
-    // So `fetchSensors` must NOT change when `sensors` changes.
-    // I will remove `sensors` from dependency and use a useRef for tracking initialization if needed.
-    // OR just remove the "if sensors.length == 0" check and always set loading specific to initial load.
+    }, [session, id, activeTab]);
+
+    // Fetch Datasources
+    const fetchDatasources = useCallback(async () => {
+        if (!session?.accessToken || !id) return;
+
+        try {
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+            const res = await fetch(`${apiUrl}/projects/${id}/datasources`, {
+                headers: { Authorization: `Bearer ${session.accessToken}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setDatasources(data);
+            }
+        } catch (err) {
+            console.error("Failed to fetch datasources", err);
+        }
+    }, [session, id]);
 
     // Initial Fetch & Auto-Refresh
     useEffect(() => {
-        fetchSensors();
+        if (activeTab === "sensors" || activeTab === "datasets") {
+            fetchSensors();
+        } else if (activeTab === "datasources") {
+            fetchDatasources();
+        }
 
         const interval = setInterval(() => {
             if (process.env.NODE_ENV !== "production") {
-                console.log("Auto-refreshing sensors...");
+                console.log("Auto-refreshing view...");
             }
-            fetchSensors();
-        }, 300000); // Refresh every 5 minutes
+            if (activeTab === "sensors" || activeTab === "datasets") fetchSensors();
+            else if (activeTab === "datasources") fetchDatasources();
+        }, 300000); // 5 min
 
         return () => clearInterval(interval);
-    }, [fetchSensors]);
+    }, [fetchSensors, fetchDatasources, activeTab]);
 
     // Handlers
-    const handleAddSensor = async (data: any) => {
+    const handleLinkSensor = async (sensorId: string) => {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-        const res = await fetch(`${apiUrl}/projects/${id}/things`, {
+        const res = await fetch(`${apiUrl}/projects/${id}/sensors/${sensorId}`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
                 Authorization: `Bearer ${session?.accessToken}`
-            },
-            body: JSON.stringify(data)
+            }
         });
 
         if (!res.ok) {
             const err = await res.json();
-            throw new Error(err.detail || "Failed to create sensor");
+            throw new Error(err.detail || "Failed to link sensor");
         }
 
         // Refresh and close
         await fetchSensors();
-        setIsAddModalOpen(false);
+        setIsLinkModalOpen(false);
     };
 
     const handleUpdateSensor = async (data: any) => {
@@ -124,13 +142,13 @@ export default function ProjectDataPage({ params }: PageProps) {
         // Refresh list and update selected sensor detail context
         await fetchSensors();
         setEditingSensor(null);
-        setSelectedSensor(null); // Close detail modal to avoid stale data, or verify logic
+        setSelectedSensor(null);
     };
 
     const handleDeleteSensor = async (sensorId: string) => {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
         try {
-            const res = await fetch(`${apiUrl}/projects/${id}/things/${sensorId}?delete_from_source=true`, {
+            const res = await fetch(`${apiUrl}/projects/${id}/things/${sensorId}`, {
                 method: 'DELETE',
                 headers: { Authorization: `Bearer ${session?.accessToken}` }
             });
@@ -139,11 +157,11 @@ export default function ProjectDataPage({ params }: PageProps) {
                 await fetchSensors();
                 setSelectedSensor(null);
             } else {
-                alert("Failed to delete sensor");
+                alert("Failed to unlink sensor");
             }
         } catch (e) {
             console.error("Delete failed", e);
-            alert("Error deleting sensor");
+            alert("Error unlinking sensor");
         }
     };
 
@@ -153,14 +171,6 @@ export default function ProjectDataPage({ params }: PageProps) {
     const handleUploadData = async (file: File, parameter: string) => {
         if (!uploadSensor) return;
         const thingId = uploadSensor.id;
-        const stationIdStr = uploadSensor.station_id || String(uploadSensor.id); // Or use what API expects?
-        // My implementation in project_data.py uses `station_id_str` to verify against project, 
-        // AND then constructs series_id using it.
-        // Wait, the API `import_project_thing_data` uses `station_id_str` as path param.
-        // BUT it verifies `if station_id_str not in sensors`.
-        // AND `ProjectService.list_sensors` returns internal IDs (int/uuid).
-        // So I must use the INTERNAL thing ID as the text in path.
-        // Let's ensure consistent usage.
 
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
         const formData = new FormData();
@@ -185,6 +195,86 @@ export default function ProjectDataPage({ params }: PageProps) {
         // Success
     };
 
+    // Datasource Handlers
+    const handleSaveDatasource = async (data: any) => {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+        const method = editingDatasource ? 'PUT' : 'POST';
+        const url = editingDatasource
+            ? `${apiUrl}/projects/${id}/datasources/${editingDatasource.id}`
+            : `${apiUrl}/projects/${id}/datasources`;
+
+        const res = await fetch(url, {
+            method,
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${session?.accessToken}`
+            },
+            body: JSON.stringify(data)
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Failed to save datasource");
+        }
+
+        await fetchDatasources();
+        setIsDatasourceModalOpen(false);
+        setEditingDatasource(null);
+    };
+
+    const handleDeleteDatasource = async (dsId: string) => {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+        const res = await fetch(`${apiUrl}/projects/${id}/datasources/${dsId}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${session?.accessToken}` }
+        });
+        if (res.ok) {
+            await fetchDatasources();
+        } else {
+            alert("Failed to delete datasource");
+        }
+    };
+
+    const handleTestConnection = async (ds: any) => {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+        const res = await fetch(`${apiUrl}/projects/${id}/datasources/${ds.id}/test`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${session?.accessToken}` }
+        });
+
+        if (res.ok) {
+            alert("Connection successful!");
+        } else {
+            const err = await res.json();
+            alert(`Connection failed: ${err.detail}`);
+        }
+    };
+
+    const handleRunQuery = async (sql: string) => {
+        if (!queryDatasource) return;
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+
+        try {
+            const res = await fetch(`${apiUrl}/projects/${id}/datasources/${queryDatasource.id}/query`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${session?.accessToken}`
+                },
+                body: JSON.stringify({ sql })
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.detail || "Query execution failed");
+            }
+
+            return await res.json();
+        } catch (e: any) {
+            throw new Error(e.message || "Query failed");
+        }
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
@@ -204,26 +294,86 @@ export default function ProjectDataPage({ params }: PageProps) {
                     >
                         ↻ Refresh
                     </button>
+                    {activeTab === "sensors" && (
+                        <button
+                            onClick={() => window.open("http://localhost:8082", "_blank")}
+                            className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white font-semibold rounded-lg transition-colors border border-white/10 flex items-center gap-2"
+                        >
+                            <span>⚙ Manage Devices</span>
+                            <span className="text-xs text-white/50">↗</span>
+                        </button>
+                    )}
                     <button
-                        onClick={() => setIsAddModalOpen(true)}
+                        onClick={() => {
+                            if (activeTab === "datasources") {
+                                setIsDatasourceModalOpen(true);
+                            } else if (activeTab === "sensors") {
+                                setIsLinkModalOpen(true);
+                            } else {
+                                alert("Dataset creation from here is temporarily disabled. Please use TimeIO TM.");
+                            }
+                        }}
                         className="px-4 py-2 bg-hydro-primary text-black font-semibold rounded-lg hover:bg-hydro-accent transition-colors"
                     >
-                        {activeTab === "sensors" ? "+ Add Sensor" : "+ New Dataset"}
+                        {activeTab === "datasources" ? "+ Add Datasource" : (activeTab === "sensors" ? "Link Sensor" : "+ New Dataset")}
                     </button>
                 </div>
             </div>
 
-            {loading && sensors.length === 0 ? (
+            <div className="flex border-b border-white/10 mb-4">
+                <button
+                    onClick={() => setActiveTab("sensors")}
+                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "sensors"
+                        ? "border-hydro-primary text-white"
+                        : "border-transparent text-white/50 hover:text-white"
+                        }`}
+                >
+                    Sensors
+                </button>
+                <button
+                    onClick={() => setActiveTab("datasets")}
+                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "datasets"
+                        ? "border-hydro-primary text-white"
+                        : "border-transparent text-white/50 hover:text-white"
+                        }`}
+                >
+                    Datasets
+                </button>
+                <button
+                    onClick={() => setActiveTab("datasources")}
+                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "datasources"
+                        ? "border-hydro-primary text-white"
+                        : "border-transparent text-white/50 hover:text-white"
+                        }`}
+                >
+                    Datasources
+                </button>
+            </div>
+
+            {activeTab === "datasources" ? (
+                <DatasourceList
+                    datasources={datasources}
+                    onSelectDatasource={setEditingDatasource}
+                    onDelete={handleDeleteDatasource}
+                    onTestConnection={handleTestConnection}
+                    onQuery={(ds) => {
+                        setQueryDatasource(ds);
+                        setQueryModalOpen(true);
+                    }}
+                />
+            ) : (loading && sensors.length === 0 ? (
                 <div className="text-white/50 animate-pulse">Loading data...</div>
             ) : (
                 <SensorList
                     sensors={sensors}
                     onSelectSensor={setSelectedSensor}
                     onUpload={setUploadSensor}
-                    activeTab={activeTab}
-                    onTabChange={setActiveTab}
+                    activeTab={activeTab as "sensors" | "datasets"}
+                    onTabChange={(tab) => setActiveTab(tab)}
+                    hideTabs={true}
                 />
-            )}
+            ))}
+
 
             {/* Detail Modal */}
             {selectedSensor && (
@@ -248,22 +398,41 @@ export default function ProjectDataPage({ params }: PageProps) {
                 sensorName={uploadSensor?.name || "Sensor"}
             />
 
-            {/* Add Modal */}
-            <SensorFormModal
-                isOpen={isAddModalOpen}
-                onClose={() => setIsAddModalOpen(false)}
-                onSubmit={handleAddSensor}
-                mode="create"
-                defaultType={activeTab === "datasets" ? "dataset" : undefined}
+            {/* Link Modal */}
+            <SensorLinkModal
+                isOpen={isLinkModalOpen}
+                onClose={() => setIsLinkModalOpen(false)}
+                onSubmit={handleLinkSensor}
+                linkedSensorIds={sensors.map((s) => String(s.id))}
             />
 
-            {/* Edit Modal */}
+            {/* Edit Modal (Keeping for editing existing) */}
             <SensorFormModal
                 isOpen={!!editingSensor}
                 onClose={() => setEditingSensor(null)}
                 onSubmit={handleUpdateSensor}
                 initialData={editingSensor}
                 mode="edit"
+            />
+
+            {/* Datasource Modals */}
+            <DatasourceFormModal
+                isOpen={isDatasourceModalOpen || !!editingDatasource}
+                onClose={() => {
+                    setIsDatasourceModalOpen(false);
+                    setEditingDatasource(null);
+                }}
+                onSubmit={handleSaveDatasource}
+                mode={editingDatasource ? "edit" : "create"}
+                initialData={editingDatasource}
+            />
+
+            {/* Query Modal */}
+            <QueryModal
+                isOpen={queryModalOpen}
+                onClose={() => setQueryModalOpen(false)}
+                onRunQuery={handleRunQuery}
+                datasourceName={queryDatasource?.name || "Datasource"}
             />
         </div>
     );

@@ -21,9 +21,10 @@ interface SensorListProps {
     onUpload?: (sensor: Sensor) => void;
     activeTab: "sensors" | "datasets";
     onTabChange: (tab: "sensors" | "datasets") => void;
+    hideTabs?: boolean;
 }
 
-export default function SensorList({ sensors, onSelectSensor, onUpload, activeTab, onTabChange }: SensorListProps) {
+export default function SensorList({ sensors, onSelectSensor, onUpload, activeTab, onTabChange, ...props }: SensorListProps) {
     // Filter Logic
     const datasets = sensors.filter(s =>
         s.station_type === 'dataset' ||
@@ -37,26 +38,28 @@ export default function SensorList({ sensors, onSelectSensor, onUpload, activeTa
     return (
         <div className="space-y-4">
             {/* Tabs */}
-            <div className="flex border-b border-white/10">
-                <button
-                    onClick={() => onTabChange("sensors")}
-                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "sensors"
-                        ? "border-hydro-primary text-white"
-                        : "border-transparent text-white/50 hover:text-white"
-                        }`}
-                >
-                    Sensors ({physicalSensors.length})
-                </button>
-                <button
-                    onClick={() => onTabChange("datasets")}
-                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "datasets"
-                        ? "border-hydro-primary text-white"
-                        : "border-transparent text-white/50 hover:text-white"
-                        }`}
-                >
-                    Datasets ({datasets.length})
-                </button>
-            </div>
+            {!props.hideTabs && (
+                <div className="flex border-b border-white/10">
+                    <button
+                        onClick={() => onTabChange("sensors")}
+                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "sensors"
+                            ? "border-hydro-primary text-white"
+                            : "border-transparent text-white/50 hover:text-white"
+                            }`}
+                    >
+                        Sensors ({physicalSensors.length})
+                    </button>
+                    <button
+                        onClick={() => onTabChange("datasets")}
+                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "datasets"
+                            ? "border-hydro-primary text-white"
+                            : "border-transparent text-white/50 hover:text-white"
+                            }`}
+                    >
+                        Datasets ({datasets.length})
+                    </button>
+                </div>
+            )}
 
             {displayList.length === 0 ? (
                 <div className="text-white/50 text-center py-10 bg-white/5 rounded-xl border border-white/10">
