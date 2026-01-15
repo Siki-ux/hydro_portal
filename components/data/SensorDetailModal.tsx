@@ -3,19 +3,22 @@
 
 import { useEffect, useState, useRef } from "react";
 // Remove unused format import
+import Link from "next/link";
+import { useParams } from "next/navigation";
 import TimeSeriesChart from "./TimeSeriesChart";
-import { X, Trash2, Edit, Map, FileText } from "lucide-react";
+import { X, Trash2, Edit, Map, FileText, ArrowUpRight } from "lucide-react";
 
 // Helper to fetch data
 async function getDataPoints(stationId: number, token: string) {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
     try {
-        const res = await fetch(`${apiUrl}/water-data/data-points?station_id=${stationId}&limit=100`, {
+        const res = await fetch(`${apiUrl}/water-data/data-points?station_id=${stationId}&limit=100&sort_order=desc`, {
             headers: { Authorization: `Bearer ${token}` }
         });
         if (!res.ok) return [];
         const data = await res.json();
-        return data.data_points || [];
+        const points = data.data_points || [];
+        return points.reverse(); // Return in chronological order (Oldest -> Newest)
     } catch (e) {
         console.error("Failed to fetch data points", e);
         return [];
@@ -74,6 +77,9 @@ export default function SensorDetailModal({
         setIsDeleting(false);
     };
 
+    const params = useParams();
+    const projectId = params?.id;
+
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
             <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto flex flex-col shadow-2xl">
@@ -82,7 +88,7 @@ export default function SensorDetailModal({
                     <div>
                         <h2 className="text-2xl font-bold text-white">{sensor.name}</h2>
                         <p className="text-white/50 text-sm mt-1 font-mono">
-                            ID: {sensor.station_id || sensor.id}
+                            ID: {sensor.id}
                         </p>
                     </div>
 
@@ -105,6 +111,13 @@ export default function SensorDetailModal({
                             </>
                         ) : (
                             <>
+                                <Link
+                                    href={`/projects/${projectId}/data/${sensor.id}`}
+                                    className="flex items-center gap-1 px-3 py-1 bg-hydro-primary/10 hover:bg-hydro-primary/20 text-hydro-primary rounded text-sm transition-colors border border-hydro-primary/20"
+                                >
+                                    <ArrowUpRight className="w-3 h-3" />
+                                    Full History
+                                </Link>
                                 <button
                                     onClick={() => onEdit(sensor)}
                                     className="flex items-center gap-1 px-3 py-1 bg-white/10 hover:bg-white/20 rounded text-sm transition-colors text-white"

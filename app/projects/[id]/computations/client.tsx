@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Upload, FileCode, Play, Save, X, Terminal, Clock, CheckCircle, XCircle } from 'lucide-react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 
 interface ComputationScript {
     id: string;
@@ -46,6 +46,19 @@ export default function ComputationsClient({ token }: ComputationsClientProps) {
         },
         enabled: !!token && !!projectId
     });
+
+    // Handle ID query param
+    const searchParams = useSearchParams();
+    const scriptIdParam = searchParams.get('scriptId');
+
+    useEffect(() => {
+        if (scriptIdParam && scripts.length > 0 && !selectedScript) {
+            const found = scripts.find(s => s.id === scriptIdParam);
+            if (found) {
+                setSelectedScript(found);
+            }
+        }
+    }, [scriptIdParam, scripts, selectedScript]);
 
     return (
         <div className="flex h-full gap-6 p-6">
