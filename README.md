@@ -11,95 +11,54 @@ The goal is to build a "Grafana-like" experience tailored for hydrology. Users c
 
 The interface is built around **Drag-and-Drop** dashboards, where users can resize and rearrange widgets to suit their workflow.
 
-## Features
+## Features (Implemented)
 
+### 1. Core Platform
 -   **Authentication**: Secure login via Keycloak (SSO).
--   **Customizable Dashboards**:
-    -   Create, Edit, and Share dashboards.
-    -   Grid-based layout system (move and resize widgets).
-    -   Persistence of user layouts to the backend.
--   **Widget Library**:
-    -   **Map Widget**: Layer control, Region selection, GeoServer WMS integration.
-    -   **Chart Widget**: Interactive time-series plots.
-    -   **Script Widget**: Upload python scripts, trigger calculation jobs, view results.
--   **Data Integration**:
-    -   Seamless Drill-down: Click a river on the map -> Open data in a Chart widget.
-    -   Bulk Operations: Manage large datasets.
--   **Data Management**:
-    -   **Unified Interface**: Manage physical **Sensors** and virtual **Datasets** in one place.
-    -   **Easy Import**: Drag-and-drop CSV upload for creating new data series.
-    -   **Smart Creation**: Context-aware "Add Sensor" vs "New Dataset" workflows.
+-   **Project Management**:
+    -   **Context Sidebar**: Quick navigation for Overview, Dashboards, Map, Data, Computations, and Alerts.
+    -   **Overview**: Project status summary.
 
-## Technology Stack
+### 2. Data Visualization
+-   **Interactive Map**:
+    -   Displays Stations and Datasets.
+    -   GeoServer WMS/WFS Integration.
+    -   Dataset Filtering (e.g., Hide static datasets).
+-   **Time Series Data**:
+    -   Raw data viewer.
+    -   Chart widgets in dashboards.
 
-We use a modern, performance-oriented stack to ensure a premium user experience ("Wow factor").
+### 3. Computation Engine
+-   **Script Management**: Upload `.py` scripts.
+-   **Code Editor**: Built-in editor to view/modify computation logic.
+-   **Execution**:
+    -   Run scripts directly from the UI.
+    -   **History**: View detailed execution logs and results.
 
--   **Core Framework**: [React](https://react.dev/) (v18+) with [Vite](https://vitejs.dev/) (Fast build tool).
--   **Language**: [TypeScript](https://www.typescriptlang.org/) (Strict typing for robustness).
--   **State Management**:
-    -   [Zustand](https://github.com/pmndrs/zustand) (Global client state).
-    -   [TanStack Query](https://tanstack.com/query/latest) (Server state / Async data caching).
--   **UI Component Library**: [Mantine](https://mantine.dev/) or [Shadcn/UI](https://ui.shadcn.com/).
-    -   *Why?* Comprehensive components, modern aesthetics (Dark mode support), and accessible.
--   **Dashboard Layout**: [React-Grid-Layout](https://github.com/react-grid-layout/react-grid-layout).
-    -   Enables the "Grafana-like" draggable/resizable grid system.
--   **Maps**: [React-Leaflet](https://react-leaflet.js.org/) or [MapLibre GL JS](https://maplibre.org/).
-    -   *Recommendation*: MapLibre for vector tiles and performance, or Leaflet for simplicity with WMS. Given the "Premium" requirement, **MapLibre** is better for smooth vector interactions.
--   **Charts**: [Recharts](https://recharts.org/) or [Nivo](https://nivo.rocks/).
-    -   SVG/Canvas based, highly customizable.
--   **Auth**: [NextAuth.js](https://next-auth.js.org/) (Secure authentication with Keycloak Provider).
-    -   Handles session management, token refreshing, and server-side protection.
+### 4. Alerting System
+-   **Rule Management**: Create custom alert rules (e.g., "Water Level > 5m").
+-   **Test Triggers**: Manually trigger alerts for testing.
+-   **History**: Audit log of all triggered alerts.
 
-## Implementation Plan
+### 5. Technology Stack
+-   **Core**: [React](https://react.dev/) + [Vite](https://vitejs.dev/) + [TypeScript](https://www.typescriptlang.org/).
+-   **State**: [Zustand](https://github.com/pmndrs/zustand) + [TanStack Query](https://tanstack.com/query/latest).
+-   **UI**: [Lucide Icons](https://lucide.dev/), Modern Dark Theme.
+-   **Map**: [React-Leaflet](https://react-leaflet.js.org/).
 
-### Phase 1: Foundation & Authentication
--   [ ] Initialize project (Vite + TS + ESLint + Prettier).
--   [ ] Configure Docker environment (Dockerfile, Compose).
--   [ ] Implement Keycloak Integration (Login/Logout, Token handling).
--   [ ] Create Basic App Layout (Sidebar, Header, Main Content Area).
-
-### Phase 2: Dashboard Core
--   [ ] Implement Dashboard State Management (Zustand store).
--   [ ] Integrate `react-grid-layout`.
--   [ ] Create "Dashboard Editor" mode (Add/Remove widgets, Drag/Resize).
--   [ ] Connect to Backend API (`GET /dashboards`, `POST /dashboards`).
-
-### Phase 3: The Map Widget (Geospatial)
--   [ ] Create generic Map Component.
--   [ ] Implement WMS Layer support (Connect to GeoServer).
--   [ ] Add "Region Selection" interaction (Click feature -> Select State).
-## App Architecture & User Flow
+## App Architecture & Navigation
 
 The application follows a **Project-Centric** workflow:
 
 1.  **Authentication**: Users sign in via `/auth/signin`.
-2.  **Project Selection (`/projects`)**: The main landing page for logged-in users. Lists all projects the user is a member of.
-3.  **Project Context (`/projects/[id]`)**: Once a project is selected, the user enters the project context.
-    -   **Context Sidebar**: Provides access to project-specific resources:
-        -   **Overview**: Project status and summary.
-        -   **Dashboards**: Visualizations specific to this project.
-        -   **Map**: Geospatial data for this project area.
-        -   **Data**: Raw time-series data access.
-
-## Getting Started
--   [ ] Implement "Layers Control" (Toggle Rivers, Districts, etc.).
-
-### Phase 4: Data Visualization (Time Series)
--   [ ] Create Chart Widget.
--   [ ] Implement "Data Source" selector (Link to Map Selection or specific Station ID).
--   [ ] Fetch data from `water_dp` TimeSeries API.
--   [ ] Add Interactivity (Zoom, Pan, Tooltip).
-
-### Phase 5: Advanced Features (Computations)
--   [ ] Create "Computation Control" Widget.
--   [ ] UI for Script Upload (`POST /computations/upload`).
--   [ ] UI for Job triggering and Status monitoring.
--   [ ] Visualization of Computation Results (if applicable).
-
-### Phase 6: Polish & Optimization
--   [ ] Aesthetic refinements (Glassmorphism, Animations, Transitions).
--   [ ] Performance optimization (Lazy loading, Memoization).
--   [ ] Responsive Design checks.
+2.  **Project Selection (`/projects`)**: The main landing page.
+3.  **Project Context (`/projects/[id]`)**:
+    -   **Overview**: Project summary.
+    -   **Dashboards**: Customizable grid layouts.
+    -   **Map**: Geospatial view.
+    -   **Data**: Sensor and Dataset management.
+    -   **Computations**: Python script execution and history.
+    -   **Alerts**: Rule configuration and notifications.
 
 ## Development Setup
 
@@ -107,3 +66,9 @@ The application follows a **Project-Centric** workflow:
 2.  **Install**: `npm install`
 3.  **Run Dev**: `npm run dev`
 4.  **Build**: `npm run build`
+
+## Roadmap
+
+- [ ] **Dashboard Editor**: Drag-and-drop widget resizing (React-Grid-Layout integration).
+- [ ] **Advanced Charts**: More visualization types (Heatmaps, Scatter plots).
+- [ ] **Widget Library**: dedicated widgets for "Alert Status" or "Latest Computation Result".

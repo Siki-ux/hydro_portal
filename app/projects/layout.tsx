@@ -22,7 +22,7 @@ export default async function ProjectsLayout({
 
             <AppHeader />
 
-            <main className="relative z-10 pt-20 px-6 max-w-7xl mx-auto">
+            <main className="relative z-10 pt-20 px-6 w-full">
                 {children}
             </main>
         </div>
