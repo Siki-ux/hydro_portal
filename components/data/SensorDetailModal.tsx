@@ -9,10 +9,10 @@ import TimeSeriesChart from "./TimeSeriesChart";
 import { X, Trash2, Edit, Map, FileText, ArrowUpRight } from "lucide-react";
 
 // Helper to fetch data
-async function getDataPoints(stationId: number, token: string) {
+async function getDataPoints(stationId: string | number, token: string) {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
     try {
-        const res = await fetch(`${apiUrl}/water-data/data-points?station_id=${stationId}&limit=100&sort_order=desc`, {
+        const res = await fetch(`${apiUrl}/water-data/data-points?id=${stationId}&limit=100&sort_order=desc`, {
             headers: { Authorization: `Bearer ${token}` }
         });
         if (!res.ok) return [];

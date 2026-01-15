@@ -101,7 +101,7 @@ export default function SensorDataPage({ params }: PageProps) {
 
             // Build query params
             const params = new URLSearchParams({
-                station_id: stationId,
+                id: stationId,
                 limit: "5000", // Increased limit for history
                 sort_order: "desc"
             });
@@ -132,7 +132,7 @@ export default function SensorDataPage({ params }: PageProps) {
             const limit = 50;
 
             const params = new URLSearchParams({
-                station_id: stationId,
+                id: stationId,
                 limit: limit.toString(),
                 offset: currentOffset.toString(),
                 sort_order: "desc"

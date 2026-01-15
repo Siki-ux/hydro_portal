@@ -23,7 +23,7 @@ interface GeoLayer {
 
 // Fetcher for latest sensor data (Single Station)
 const fetchSensorData = async (sensorId: string, token: string) => {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/water-data/data-points?station_id=${sensorId}&limit=1`, {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/water-data/data-points?id=${sensorId}&limit=1`, {
         headers: { Authorization: `Bearer ${token}` }
     });
     if (!res.ok) throw new Error('Failed to fetch data');
