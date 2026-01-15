@@ -8,7 +8,9 @@ import {
     Database,
     Settings,
     ChevronLeft,
-    Activity
+    Activity,
+    FileCode,
+    Bell
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +27,8 @@ export function ProjectSidebar({ projectId, projectName }: ProjectSidebarProps) 
         { label: "Dashboards", icon: LayoutDashboard, href: `/projects/${projectId}/dashboards` },
         { label: "Map", icon: MapIcon, href: `/projects/${projectId}/map` },
         { label: "Data", icon: Database, href: `/projects/${projectId}/data` },
+        { label: "Computations", icon: FileCode, href: `/projects/${projectId}/computations` },
+        { label: "Alerts", icon: Bell, href: `/projects/${projectId}/alerts` },
         { label: "Settings", icon: Settings, href: `/projects/${projectId}/settings` },
     ];
 

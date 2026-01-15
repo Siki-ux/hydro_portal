@@ -27,13 +27,13 @@ export default function SignIn() {
 
             if (result?.error) {
                 setError("Invalid credentials");
+                setLoading(false);
             } else {
                 router.push("/projects");
                 router.refresh();
             }
         } catch (err) {
             setError("Something went wrong");
-        } finally {
             setLoading(false);
         }
     };
