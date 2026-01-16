@@ -1,12 +1,13 @@
 import { auth } from "@/lib/auth";
 import ProjectMap from "@/components/ProjectMap";
 import { Sensor } from "@/types/sensor";
+import { getApiUrl } from "@/lib/utils";
 
 async function getProject(id: string) {
     const session = await auth();
     if (!session?.accessToken) return null;
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+    const apiUrl = getApiUrl();
 
     try {
         const res = await fetch(`${apiUrl}/projects/${id}`, {
@@ -24,7 +25,7 @@ async function getProjectSensors(id: string) {
     const session = await auth();
     if (!session?.accessToken) return [];
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+    const apiUrl = getApiUrl();
 
     try {
         const res = await fetch(`${apiUrl}/projects/${id}/sensors`, {
@@ -51,8 +52,32 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
     // Basic stats calculation
     const activeSensors = sensors.filter(s => s.status === 'active').length;
 
-    // Check for alerts (mock logic for now or real if status reflects it)
-    const alertSensors = sensors.filter(s => s.status !== 'active' && s.status !== 'inactive').length;
+    // Fetch Active Alerts Count
+    let activeAlertsCount = 0;
+    try {
+        const apiUrl = getApiUrl();
+        const res = await fetch(`${apiUrl}/alerts/history/${id}?status=active&limit=1`, {
+            headers: { Authorization: `Bearer ${session?.accessToken || ''}` },
+            cache: 'no-store'
+        });
+        if (res.ok) {
+            // If we fetch all active alerts, we get the count. 
+            // Optimally we'd have a count endpoint, but for now fetching list is okay for MVP unless huge.
+            // Wait, I passed limit=1? That won't give count.
+            // Let's remove limit to get count, or use a separate logic.
+            // Given "proper amount", fetch all active is safest for now (assuming <1000 active).
+            const resAll = await fetch(`${apiUrl}/alerts/history/${id}?status=active`, {
+                headers: { Authorization: `Bearer ${session?.accessToken || ''}` },
+                cache: 'no-store'
+            });
+            if (resAll.ok) {
+                const alerts = await resAll.json();
+                activeAlertsCount = alerts.length;
+            }
+        }
+    } catch (e) {
+        console.error("Failed to fetch alert count", e);
+    }
 
     return (
         <div className="space-y-6">
@@ -69,8 +94,8 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
                     <div className="text-sm text-white/50">Active Sensors</div>
                 </div>
                 <div className="p-6 rounded-xl bg-white/5 border border-white/10">
-                    <div className="text-4xl font-bold text-orange-400 mb-2">{alertSensors}</div>
-                    <div className="text-sm text-white/50">Alerts</div>
+                    <div className="text-4xl font-bold text-orange-400 mb-2">{activeAlertsCount}</div>
+                    <div className="text-sm text-white/50">Active Alerts</div>
                 </div>
             </div>
 

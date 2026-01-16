@@ -12,6 +12,8 @@ function parseJwt(token: string) {
     }
 }
 
+import { getApiUrl } from "./utils"
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
     providers: [
         Credentials({
@@ -25,7 +27,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         return null
                     }
 
-                    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'
+                    const apiUrl = getApiUrl()
 
                     // Using URLSearchParams to send data as application/x-www-form-urlencoded
                     const params = new URLSearchParams();

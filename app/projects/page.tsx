@@ -1,13 +1,14 @@
 import { ProjectCard } from "@/components/ProjectCard";
 import Link from "next/link";
 import { Plus } from "lucide-react";
+import { getApiUrl } from "@/lib/utils";
 import { auth } from "@/lib/auth";
 
 async function getProjects() {
     const session = await auth();
     if (!session?.accessToken) return [];
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+    const apiUrl = getApiUrl();
 
     try {
         const res = await fetch(`${apiUrl}/projects`, {
@@ -28,7 +29,7 @@ async function getProjects() {
 
 async function getProjectSensorCount(id: string, session: any) {
     if (!session?.accessToken) return 0;
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+    const apiUrl = getApiUrl();
 
     try {
         const res = await fetch(`${apiUrl}/projects/${id}/sensors`, {

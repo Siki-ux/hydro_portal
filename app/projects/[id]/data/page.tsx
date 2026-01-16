@@ -4,10 +4,13 @@
 import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import React from "react";
+import { useSearchParams } from "next/navigation";
+import { ArrowUpRight } from "lucide-react";
 import SensorList from "@/components/data/SensorList";
 import SensorDetailModal from "@/components/data/SensorDetailModal";
 import SensorFormModal from "@/components/data/SensorFormModal";
 import DataUploadModal from "@/components/data/DataUploadModal";
+import SensorLinkModal from "@/components/data/SensorLinkModal";
 
 interface PageProps {
     params: Promise<{ id: string }>;
@@ -23,6 +26,7 @@ export default function ProjectDataPage({ params }: PageProps) {
     // Modal States
     const [selectedSensor, setSelectedSensor] = useState<any | null>(null);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
     const [editingSensor, setEditingSensor] = useState<any | null>(null);
     const [activeTab, setActiveTab] = useState<"sensors" | "datasets">("sensors");
 
@@ -38,7 +42,7 @@ export default function ProjectDataPage({ params }: PageProps) {
             // Removing state usage to break dependency cycle. Using `loading` state logic elsewhere.
 
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-            const res = await fetch(`${apiUrl}/projects/${id}/things`, {
+            const res = await fetch(`${apiUrl}/projects/${id}/sensors`, {
                 headers: { Authorization: `Bearer ${session.accessToken}` }
             });
 
@@ -79,10 +83,27 @@ export default function ProjectDataPage({ params }: PageProps) {
         return () => clearInterval(interval);
     }, [fetchSensors]);
 
+    // ID param logic must wait for sensors to be loaded
+    const searchParams = useSearchParams();
+    const sensorIdParam = searchParams.get('sensorId');
+
+    useEffect(() => {
+        if (sensorIdParam && sensors.length > 0 && !selectedSensor) {
+            const found = sensors.find((s: any) => s.id === sensorIdParam || s.station_id === sensorIdParam);
+            if (found) {
+                setSelectedSensor(found);
+            }
+        }
+    }, [sensorIdParam, sensors, selectedSensor]);
+
     // Handlers
     const handleAddSensor = async (data: any) => {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-        const res = await fetch(`${apiUrl}/projects/${id}/things`, {
+        // Use /sensors endpoint to associate with project. 
+        // Note: Currently backend expects valid sensor_id query param for linking. 
+        // We are sending body for creation. 
+        // This will require backend to handle creation if sensor_id is missing.
+        const res = await fetch(`${apiUrl}/projects/${id}/sensors`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -99,6 +120,24 @@ export default function ProjectDataPage({ params }: PageProps) {
         // Refresh and close
         await fetchSensors();
         setIsAddModalOpen(false);
+    };
+
+    const handleLinkSensor = async (sensorId: string) => {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+        const res = await fetch(`${apiUrl}/projects/${id}/sensors?sensor_id=${sensorId}`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${session?.accessToken}`
+            }
+        });
+
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Failed to link sensor");
+        }
+
+        await fetchSensors();
+        setIsLinkModalOpen(false);
     };
 
     const handleUpdateSensor = async (data: any) => {
@@ -198,6 +237,15 @@ export default function ProjectDataPage({ params }: PageProps) {
                     </p>
                 </div>
                 <div className="flex gap-2">
+                    <a
+                        href="http://localhost:8082"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 bg-white/5 hover:bg-white/10 text-hydro-secondary font-semibold rounded-lg transition-colors border border-white/10 flex items-center gap-2"
+                    >
+                        <span>TimeIO</span>
+                        <ArrowUpRight size={16} />
+                    </a>
                     <button
                         onClick={() => fetchSensors()}
                         className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white font-semibold rounded-lg transition-colors border border-white/10"
@@ -205,7 +253,10 @@ export default function ProjectDataPage({ params }: PageProps) {
                         ↻ Refresh
                     </button>
                     <button
-                        onClick={() => setIsAddModalOpen(true)}
+                        onClick={() => {
+                            if (activeTab === "sensors") setIsLinkModalOpen(true);
+                            else setIsAddModalOpen(true);
+                        }}
                         className="px-4 py-2 bg-hydro-primary text-black font-semibold rounded-lg hover:bg-hydro-accent transition-colors"
                     >
                         {activeTab === "sensors" ? "+ Add Sensor" : "+ New Dataset"}
@@ -248,13 +299,22 @@ export default function ProjectDataPage({ params }: PageProps) {
                 sensorName={uploadSensor?.name || "Sensor"}
             />
 
-            {/* Add Modal */}
+            {/* Add Modal (Used for Datasets or explicit creation) */}
             <SensorFormModal
                 isOpen={isAddModalOpen}
                 onClose={() => setIsAddModalOpen(false)}
                 onSubmit={handleAddSensor}
                 mode="create"
                 defaultType={activeTab === "datasets" ? "dataset" : undefined}
+            />
+
+            {/* Link Modal (Primary for Sensors) */}
+            <SensorLinkModal
+                isOpen={isLinkModalOpen}
+                onClose={() => setIsLinkModalOpen(false)}
+                onLink={handleLinkSensor}
+                projectId={id}
+                token={session?.accessToken || ""}
             />
 
             {/* Edit Modal */}

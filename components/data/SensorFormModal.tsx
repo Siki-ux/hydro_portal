@@ -69,7 +69,7 @@ export default function SensorFormModal({
     defaultType
 }: SensorFormModalProps) {
     const [formData, setFormData] = useState({
-        station_id: "",
+        id: "",
         name: "",
         description: "",
         latitude: "",
@@ -85,7 +85,7 @@ export default function SensorFormModal({
     useEffect(() => {
         if (initialData && mode === "edit") {
             setFormData({
-                station_id: initialData.station_id || initialData.id || "",
+                id: initialData.id || "",
                 name: initialData.name || "",
                 description: initialData.description || "",
                 latitude: initialData.latitude || "",
@@ -98,7 +98,7 @@ export default function SensorFormModal({
         } else {
             // Reset for create
             setFormData({
-                station_id: "",
+                id: "",
                 name: "",
                 description: "",
                 latitude: "",
@@ -191,8 +191,8 @@ export default function SensorFormModal({
                             <input
                                 type="text"
                                 required
-                                value={formData.station_id}
-                                onChange={e => setFormData({ ...formData, station_id: e.target.value })}
+                                value={formData.id}
+                                onChange={e => setFormData({ ...formData, id: e.target.value })}
                                 className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-white focus:outline-none focus:border-hydro-primary"
                                 placeholder={formData.station_type === 'dataset' ? "DATASET_001" : "STATION_001"}
                                 disabled={mode === "edit"}

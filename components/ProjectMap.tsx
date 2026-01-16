@@ -23,7 +23,7 @@ interface GeoLayer {
 
 // Fetcher for latest sensor data (Single Station)
 const fetchSensorData = async (sensorId: string, token: string) => {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/water-data/data-points/latest?station_id=${sensorId}`, {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/water-data/data-points?id=${sensorId}&limit=1`, {
         headers: { Authorization: `Bearer ${token}` }
     });
     if (!res.ok) throw new Error('Failed to fetch data');
@@ -115,7 +115,7 @@ export default function ProjectMap({ sensors: initialSensors, projectId, token, 
                 type: 'Feature',
                 geometry: {
                     type: 'Point',
-                    coordinates: [sensor.location.lng, sensor.location.lat]
+                    coordinates: [sensor.longitude, sensor.latitude]
                 },
                 properties: {
                     id: sensor.id,
@@ -248,9 +248,10 @@ export default function ProjectMap({ sensors: initialSensors, projectId, token, 
                 if (btn) {
                     btn.addEventListener('click', () => {
                         const sensor = {
-                            id: props?.id,
+                            id: String(props?.id),
                             name: props?.name,
-                            location: { lat: coords[1], lng: coords[0] },
+                            latitude: coords[1],
+                            longitude: coords[0],
                             status: props?.status,
                             latest_data: []
                         } as Sensor;
@@ -265,7 +266,7 @@ export default function ProjectMap({ sensors: initialSensors, projectId, token, 
     const fitBounds = (sensorList: Sensor[]) => {
         if (!map.current || sensorList.length === 0) return;
         const bounds = new maplibregl.LngLatBounds();
-        sensorList.forEach(s => bounds.extend([s.location.lng, s.location.lat]));
+        sensorList.forEach(s => bounds.extend([s.longitude, s.latitude]));
         map.current.fitBounds(bounds, { padding: 50, maxZoom: 14 });
     };
 
@@ -280,7 +281,7 @@ export default function ProjectMap({ sensors: initialSensors, projectId, token, 
         const defaultZoom = 6;
         const validSensors = initialSensors.filter(s => s.station_type !== 'dataset');
         const initialCenter = validSensors.length > 0
-            ? [validSensors[0].location.lng, validSensors[0].location.lat] as [number, number]
+            ? [validSensors[0].longitude, validSensors[0].latitude] as [number, number]
             : defaultCenter;
 
         try {
@@ -422,7 +423,8 @@ export default function ProjectMap({ sensors: initialSensors, projectId, token, 
         if (map.current.getSource('active-wms-source')) map.current.removeSource('active-wms-source');
 
         // Use WFS (GeoJSON) for Client-Side Styling
-        const wfsUrl = `http://localhost:8080/geoserver/water_data/wfs?service=WFS&version=1.0.0&request=GetFeature&typeName=water_data:${layerName}&outputFormat=application/json`;
+        const geoserverBase = process.env.NEXT_PUBLIC_GEOSERVER_URL || 'http://localhost:8080';
+        const wfsUrl = `${geoserverBase}/geoserver/water_data/wfs?service=WFS&version=1.0.0&request=GetFeature&typeName=water_data:${layerName}&outputFormat=application/json`;
 
         map.current.addSource('active-layer-source', { type: 'geojson', data: wfsUrl });
 

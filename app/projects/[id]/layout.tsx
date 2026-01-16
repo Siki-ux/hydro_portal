@@ -1,11 +1,12 @@
 import { ProjectSidebar } from "@/components/ProjectSidebar";
+import { getApiUrl } from "@/lib/utils";
 import { auth } from "@/lib/auth";
 
 async function getProjectName(id: string) {
     const session = await auth();
     if (!session?.accessToken) return "Unknown Project";
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+    const apiUrl = getApiUrl();
 
     try {
         const res = await fetch(`${apiUrl}/projects/${id}`, {
