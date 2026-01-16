@@ -7,10 +7,11 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import TimeSeriesChart from "./TimeSeriesChart";
 import { X, Trash2, Edit, Map, FileText, ArrowUpRight } from "lucide-react";
+import { getApiUrl } from "@/lib/utils";
 
 // Helper to fetch data
 async function getDataPoints(stationId: string | number, token: string) {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+    const apiUrl = getApiUrl();
     try {
         const res = await fetch(`${apiUrl}/water-data/data-points?id=${stationId}&limit=100&sort_order=desc`, {
             headers: { Authorization: `Bearer ${token}` }
