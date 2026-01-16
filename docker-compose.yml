@@ -19,6 +19,7 @@ services:
       - NEXTAUTH_URL=http://localhost:3001
       - AUTH_URL=http://localhost:3001/api/auth
       - AUTH_TRUST_HOST=true
+
     networks:
       - water-network
 
