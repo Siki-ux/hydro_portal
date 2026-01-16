@@ -5,12 +5,12 @@
 import { format } from "date-fns";
 
 interface Sensor {
-    id: number;
-    station_id: string; // The property "station_id"
+    id: string | number;
     name: string;
     description: string;
     status: string;
     updated_at: string;
+    last_activity?: string;
     properties?: any;
     station_type?: string;
 }
@@ -85,7 +85,7 @@ export default function SensorList({ sensors, onSelectSensor, onUpload, activeTa
                                         {sensor.name}
                                     </td>
                                     <td className="px-6 py-4 font-mono text-xs text-white/50">
-                                        {sensor.station_id || sensor.properties?.station_id || "-"}
+                                        {sensor.id || "-"}
                                     </td>
                                     <td className="px-6 py-4">
                                         <span
@@ -98,8 +98,8 @@ export default function SensorList({ sensors, onSelectSensor, onUpload, activeTa
                                         </span>
                                     </td>
                                     <td className="px-6 py-4">
-                                        {sensor.updated_at
-                                            ? format(new Date(sensor.updated_at), "MMM d, HH:mm")
+                                        {(sensor.last_activity || sensor.updated_at)
+                                            ? format(new Date(sensor.last_activity || sensor.updated_at), "MMM d, HH:mm")
                                             : "-"}
                                     </td>
                                     <td className="px-6 py-4 text-right">

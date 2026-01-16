@@ -9,12 +9,11 @@ export interface Sensor {
     id: string;
     name: string;
     description?: string;
-    location: {
-        lat: number;
-        lng: number;
-    };
+    latitude: number;
+    longitude: number;
     status: string;
-    last_update?: string;
+    last_activity?: string;
+    updated_at?: string;
     latest_data?: SensorDataPoint[];
     station_type?: string;
 }
