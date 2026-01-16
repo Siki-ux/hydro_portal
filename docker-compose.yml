@@ -9,10 +9,14 @@ services:
       - "3001:3000"
     volumes:
       - .:/app
-      - /app/node_modules # Anonymous volume to preserve container node_modules
+      - /app/node_modules
     environment:
+      # Use your VM Public IP or DNS Name here!
       - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
-    # Command to run npm install on start if modules are missing (useful for first run)
+      # Authentication Secrets (Required for production/remote access)
+      - AUTH_SECRET=6e2e9c8b3a4f5d6e7f8g9h0i1j2k3l4m5n6o7p8q9r # Replace with a random string!
+      - NEXTAUTH_SECRET=6e2e9c8b3a4f5d6e7f8g9h0i1j2k3l4m5n6o7p8q9r
+      - NEXTAUTH_URL=http://localhost:3001
     command: sh -c "npm install --legacy-peer-deps && npm run dev"
     networks:
       - timeio-network
@@ -20,4 +24,4 @@ services:
 networks:
   timeio-network:
     external: true
-    name: water_dp_water_dp_network # Connect to existing backend network if needed, or use default bridge
+    name: water_dp_water_dp_network
