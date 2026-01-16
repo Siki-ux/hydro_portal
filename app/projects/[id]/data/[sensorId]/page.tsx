@@ -7,6 +7,7 @@ import { ArrowLeft, Download, RefreshCw, Calendar, TrendingUp, TrendingDown, Act
 import TimeSeriesChart from "@/components/data/TimeSeriesChart";
 import { DataTable, Column } from "@/components/data/DataTable";
 import { format, subHours } from "date-fns";
+import { getApiUrl } from "@/lib/utils";
 
 interface PageProps {
     params: Promise<{ id: string; sensorId: string }>;
@@ -50,7 +51,7 @@ export default function SensorDataPage({ params }: PageProps) {
     const [yMinInput, setYMinInput] = useState("");
     const [yMaxInput, setYMaxInput] = useState("");
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+    const apiUrl = getApiUrl();
 
     // Fetch Sensor Details
     const fetchSensor = useCallback(async () => {
