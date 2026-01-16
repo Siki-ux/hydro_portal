@@ -423,7 +423,8 @@ export default function ProjectMap({ sensors: initialSensors, projectId, token, 
         if (map.current.getSource('active-wms-source')) map.current.removeSource('active-wms-source');
 
         // Use WFS (GeoJSON) for Client-Side Styling
-        const wfsUrl = `http://localhost:8080/geoserver/water_data/wfs?service=WFS&version=1.0.0&request=GetFeature&typeName=water_data:${layerName}&outputFormat=application/json`;
+        const geoserverBase = process.env.NEXT_PUBLIC_GEOSERVER_URL || 'http://localhost:8080';
+        const wfsUrl = `${geoserverBase}/geoserver/water_data/wfs?service=WFS&version=1.0.0&request=GetFeature&typeName=water_data:${layerName}&outputFormat=application/json`;
 
         map.current.addSource('active-layer-source', { type: 'geojson', data: wfsUrl });
 

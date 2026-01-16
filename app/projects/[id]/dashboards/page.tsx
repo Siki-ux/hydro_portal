@@ -1,6 +1,7 @@
 import { DashboardCard } from "@/components/DashboardCard";
 import Link from "next/link";
 import { Plus } from "lucide-react";
+import { getApiUrl } from "@/lib/utils";
 import { auth } from "@/lib/auth";
 import { Dashboard } from "@/types/dashboard";
 
@@ -8,7 +9,7 @@ async function getDashboards(projectId: string) {
     const session = await auth();
     if (!session?.accessToken) return [];
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+    const apiUrl = getApiUrl();
 
     try {
         const res = await fetch(`${apiUrl}/projects/${projectId}/dashboards`, {

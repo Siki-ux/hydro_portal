@@ -17,7 +17,7 @@ import "react-resizable/css/styles.css";
 // Since we had issues with WidthProvider, we'll try explicit width first.
 // If needed, we can try: import { Responsive, WidthProvider } from "react-grid-layout"; 
 // But let's verify if `GridLayout` works as default export.
-const ReactGridLayout = GridLayout;
+const ReactGridLayout = GridLayout as any;
 
 interface DashboardEditorProps {
     dashboard: Dashboard;
@@ -182,7 +182,7 @@ export default function DashboardEditor({ dashboard }: DashboardEditorProps) {
                         cols={12}
                         rowHeight={30}
                         width={containerWidth}
-                        onLayoutChange={(newLayout) => setLayout(newLayout)}
+                        onLayoutChange={(newLayout: Layout[]) => setLayout(newLayout)}
                         draggableHandle=".drag-handle"
                         isDraggable
                         isResizable

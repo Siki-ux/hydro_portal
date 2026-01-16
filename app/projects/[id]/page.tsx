@@ -1,12 +1,13 @@
 import { auth } from "@/lib/auth";
 import ProjectMap from "@/components/ProjectMap";
 import { Sensor } from "@/types/sensor";
+import { getApiUrl } from "@/lib/utils";
 
 async function getProject(id: string) {
     const session = await auth();
     if (!session?.accessToken) return null;
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+    const apiUrl = getApiUrl();
 
     try {
         const res = await fetch(`${apiUrl}/projects/${id}`, {
@@ -24,7 +25,7 @@ async function getProjectSensors(id: string) {
     const session = await auth();
     if (!session?.accessToken) return [];
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+    const apiUrl = getApiUrl();
 
     try {
         const res = await fetch(`${apiUrl}/projects/${id}/sensors`, {
@@ -54,7 +55,7 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
     // Fetch Active Alerts Count
     let activeAlertsCount = 0;
     try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+        const apiUrl = getApiUrl();
         const res = await fetch(`${apiUrl}/alerts/history/${id}?status=active&limit=1`, {
             headers: { Authorization: `Bearer ${session?.accessToken || ''}` },
             cache: 'no-store'

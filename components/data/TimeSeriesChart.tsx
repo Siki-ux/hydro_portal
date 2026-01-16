@@ -92,8 +92,8 @@ export default function TimeSeriesChart({
         // Current logic:
 
         // Check if Y-selection was made
-        let minVal: number | "auto" = bottom;
-        let maxVal: number | "auto" = top;
+        let minVal: number | "auto" = bottom as any;
+        let maxVal: number | "auto" = top as any;
 
         // If drag box had Y component
         if (refAreaBottom !== "" && refAreaTop !== "") {
