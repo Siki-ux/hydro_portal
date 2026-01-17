@@ -5,8 +5,8 @@ services:
       dockerfile: Dockerfile
       target: runner
       args:
-        - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
-        - NEXT_PUBLIC_GEOSERVER_URL=http://localhost:8080
+        - NEXT_PUBLIC_API_URL=http://${PUBLIC_HOSTNAME:-localhost}:8000/api/v1
+        - NEXT_PUBLIC_GEOSERVER_URL=http://${PUBLIC_HOSTNAME:-localhost}:8080
     container_name: hydro_portal
     ports:
       - "80:3000"
