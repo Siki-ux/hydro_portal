@@ -15,7 +15,7 @@ services:
       - NEXT_PUBLIC_API_URL=http://${PUBLIC_HOSTNAME:-localhost}:8000/api/v1
       - NEXT_PUBLIC_GEOSERVER_URL=http://${PUBLIC_HOSTNAME:-localhost}:8080
       # Internal URL for container-to-container communication (fixes login issues)
-      - INTERNAL_API_URL=http://api:8000/api/v1
+      - INTERNAL_API_URL=http://water-dp-api:8000/api/v1
       # Authentication Secrets (Required in Docker)
       - AUTH_SECRET=6e2e9c8b3a4f5d6e7f8g9h0i1j2k3l4m5n6o7p8q9r
       - NEXTAUTH_SECRET=6e2e9c8b3a4f5d6e7f8g9h0i1j2k3l4m5n6o7p8q9r
@@ -23,9 +23,9 @@ services:
       - AUTH_URL=http://${PUBLIC_HOSTNAME:-localhost}/api/auth
       - AUTH_TRUST_HOST=true
     networks:
-      - water-network
+      - water_shared_net
 
 networks:
-  water-network:
-    external: true
-    name: water_dp_water_dp_network
+  water_shared_net:
+    name: water_shared_net
+    driver: bridge

@@ -422,11 +422,15 @@ export default function ProjectMap({ sensors: initialSensors, projectId, token, 
         if (map.current.getLayer('active-wms-layer')) map.current.removeLayer('active-wms-layer');
         if (map.current.getSource('active-wms-source')) map.current.removeSource('active-wms-source');
 
-        // Use WFS (GeoJSON) for Client-Side Styling
-        const geoserverBase = process.env.NEXT_PUBLIC_GEOSERVER_URL || 'http://localhost:8080';
-        const wfsUrl = `${geoserverBase}/geoserver/water_data/wfs?service=WFS&version=1.0.0&request=GetFeature&typeName=water_data:${layerName}&outputFormat=application/json`;
+        // Use Proxy Endpoint for Client-Side Styling
+        // Changed to use the backend proxy instead of direct GeoServer access
+        const proxyUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/geospatial/geoserver/layers/${layerName}/geojson`;
 
-        map.current.addSource('active-layer-source', { type: 'geojson', data: wfsUrl });
+        map.current.addSource('active-layer-source', {
+            type: 'geojson',
+            data: proxyUrl, // MapLibre can load from URL
+            generateId: true
+        });
 
         const beforeId = map.current.getLayer('sensor-circles') ? 'sensor-circles' : undefined;
 
