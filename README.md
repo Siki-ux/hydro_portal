@@ -1,74 +1,28 @@
-# Hydro Portal
+# Water DP - Hydro Portal (Frontend)
 
-**Hydro Portal** is a highly customizable, modern frontend application designed for hydrological data analysis and visualization. It serves as the user interface for the **Water Data Platform (`water_dp`)**.
+This is the user-facing dashboard built with Next.js, providing visualization for maps, charts, and data analysis.
 
-## Vision
+## 📦 Services
+*   **hydro_portal**: Next.js Application (Port 3000).
 
-The goal is to build a "Grafana-like" experience tailored for hydrology. Users can create personalized dashboards where they can mix and match:
--   **Interactive Maps**: Displaying River basins, water bodies, and custom regions (e.g., Czech Republic layers) using geospatial data.
--   **Time Series Charts**: Visualizing sensor data (Water level, discharge, precipitation) linked to map features.
--   **Computation Controls**: Widgets to upload and run Python analysis scripts on selected data.
+## 🚀 Quick Start
 
-The interface is built around **Drag-and-Drop** dashboards, where users can resize and rearrange widgets to suit their workflow.
+1.  **Configure Environment**:
+    Ensure `.env` points to the correct API URLs (Localhost for browser, container names for server-side).
+    ```bash
+    cp env.example .env
+    ```
 
-## Features (Implemented)
+2.  **Start Services**:
+    ```bash
+    docker-compose up -d --build
+    ```
 
-### 1. Core Platform
--   **Authentication**: Secure login via Keycloak (SSO).
--   **Project Management**:
-    -   **Context Sidebar**: Quick navigation for Overview, Dashboards, Map, Data, Computations, and Alerts.
-    -   **Overview**: Project status summary.
+3.  **Access**:
+    *   Dashboard: [http://localhost:3000](http://localhost:3000)
 
-### 2. Data Visualization
--   **Interactive Map**:
-    -   Displays Stations and Datasets.
-    -   GeoServer WMS/WFS Integration.
-    -   Dataset Filtering (e.g., Hide static datasets).
--   **Time Series Data**:
-    -   Raw data viewer.
-    -   Chart widgets in dashboards.
-
-### 3. Computation Engine
--   **Script Management**: Upload `.py` scripts.
--   **Code Editor**: Built-in editor to view/modify computation logic.
--   **Execution**:
-    -   Run scripts directly from the UI.
-    -   **History**: View detailed execution logs and results.
-
-### 4. Alerting System
--   **Rule Management**: Create custom alert rules (e.g., "Water Level > 5m").
--   **Test Triggers**: Manually trigger alerts for testing.
--   **History**: Audit log of all triggered alerts.
-
-### 5. Technology Stack
--   **Core**: [React](https://react.dev/) + [Vite](https://vitejs.dev/) + [TypeScript](https://www.typescriptlang.org/).
--   **State**: [Zustand](https://github.com/pmndrs/zustand) + [TanStack Query](https://tanstack.com/query/latest).
--   **UI**: [Lucide Icons](https://lucide.dev/), Modern Dark Theme.
--   **Map**: [React-Leaflet](https://react-leaflet.js.org/).
-
-## App Architecture & Navigation
-
-The application follows a **Project-Centric** workflow:
-
-1.  **Authentication**: Users sign in via `/auth/signin`.
-2.  **Project Selection (`/projects`)**: The main landing page.
-3.  **Project Context (`/projects/[id]`)**:
-    -   **Overview**: Project summary.
-    -   **Dashboards**: Customizable grid layouts.
-    -   **Map**: Geospatial view.
-    -   **Data**: Sensor and Dataset management.
-    -   **Computations**: Python script execution and history.
-    -   **Alerts**: Rule configuration and notifications.
-
-## Development Setup
-
-1.  **Prerequisites**: Node.js 20+, Docker.
-2.  **Install**: `npm install`
-3.  **Run Dev**: `npm run dev`
-4.  **Build**: `npm run build`
-
-## Roadmap
-
-- [ ] **Dashboard Editor**: Drag-and-drop widget resizing (React-Grid-Layout integration).
-- [ ] **Advanced Charts**: More visualization types (Heatmaps, Scatter plots).
-- [ ] **Widget Library**: dedicated widgets for "Alert Status" or "Latest Computation Result".
+## 🔧 Configuration
+The frontend connects to multiple services:
+*   **NEXT_PUBLIC_API_URL**: Connects to `water-dp-api` (Backend).
+*   **NEXT_PUBLIC_GEOSERVER_URL**: Connects to `water-dp-geoserver`.
+*   **Auth**: Redirects to `timeio-keycloak` for login.

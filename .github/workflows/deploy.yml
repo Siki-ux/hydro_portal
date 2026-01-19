@@ -1,0 +1,93 @@
+name: Deploy Hydro Portal
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  packages: write
+  contents: read
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Downcase REPO
+        run: |
+          echo "REPO=${GITHUB_REPOSITORY,,}" >>${GITHUB_ENV}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ghcr.io/${{ env.REPO }}/hydro_portal:latest
+          build-args: |
+            NEXT_PUBLIC_API_URL=http://${{ secrets.PUBLIC_HOSTNAME_URL }}:8000/api/v1
+            NEXT_PUBLIC_GEOSERVER_URL=http://${{ secrets.PUBLIC_HOSTNAME_URL }}:8080/geoserver
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment: DEV
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Downcase REPO
+        run: |
+          echo "REPO=${GITHUB_REPOSITORY,,}" >>${GITHUB_ENV}
+
+      - name: Generate .env file for Prod
+        run: |
+          echo "PUBLIC_HOSTNAME=${{ secrets.PUBLIC_HOSTNAME_URL }}" >> .env
+          echo "NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET }}" >> .env
+          echo "GITHUB_REPOSITORY_LOWER=${{ env.REPO }}" >> .env
+
+      - name: Copy files to VM
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.AZURE_VM_HOST }}
+          username: ${{ secrets.AZURE_VM_USERNAME }}
+          password: ${{ secrets.AZURE_VM_PASSWORD }}
+          source: "docker-compose.prod.yml,.env"
+          target: "~/hydro_portal"
+
+      - name: Deploy on VM
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.AZURE_VM_HOST }}
+          username: ${{ secrets.AZURE_VM_USERNAME }}
+          password: ${{ secrets.AZURE_VM_PASSWORD }}
+          command_timeout: 30m
+          script: |
+            mkdir -p ~/hydro_portal
+            cd ~/hydro_portal
+            
+            # Login to GHCR
+            echo ${{ secrets.GHCR_PAT }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            
+            # Reset environment
+            docker-compose -f docker-compose.prod.yml down -v || true
+            
+            # Free disk space
+            docker system prune -af
+            docker volume prune -f
+            
+            # Pull latest image
+            docker-compose -f docker-compose.prod.yml pull --quiet
+            
+            # Start service
+            docker-compose -f docker-compose.prod.yml up -d

@@ -14,6 +14,13 @@ RUN \
     fi
 
 
+# Development image
+FROM base AS dev
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+CMD ["npm", "run", "dev"]
+
 # Rebuild the source code only when needed
 FROM base AS builder
 WORKDIR /app
@@ -23,6 +30,14 @@ COPY . .
 # Next.js collects completely anonymous telemetry data about general usage.
 # Learn more here: https://nextjs.org/telemetry
 ENV NEXT_TELEMETRY_DISABLED 1
+
+# Provide build arguments for public environment variables
+# This is required for Next.js production builds to embed these values
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_GEOSERVER_URL
+
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_GEOSERVER_URL=$NEXT_PUBLIC_GEOSERVER_URL
 
 # Pre-compile the app
 RUN npm run build
@@ -53,9 +68,4 @@ ENV HOSTNAME 0.0.0.0
 # https://nextjs.org/docs/pages/api-reference/next-config-js/output
 CMD ["node", "server.js"]
 
-# Development image
-FROM base AS dev
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-CMD ["npm", "run", "dev"]
+# Done

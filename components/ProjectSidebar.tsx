@@ -25,7 +25,7 @@ export function ProjectSidebar({ projectId, projectName }: ProjectSidebarProps) 
     const links = [
         { label: "Overview", icon: Activity, href: `/projects/${projectId}` },
         { label: "Dashboards", icon: LayoutDashboard, href: `/projects/${projectId}/dashboards` },
-        { label: "Map", icon: MapIcon, href: `/projects/${projectId}/map` },
+        { label: "Map", icon: MapIcon, href: `/projects/${projectId}` },
         { label: "Data", icon: Database, href: `/projects/${projectId}/data` },
         { label: "Computations", icon: FileCode, href: `/projects/${projectId}/computations` },
         { label: "Alerts", icon: Bell, href: `/projects/${projectId}/alerts` },
@@ -53,7 +53,7 @@ export function ProjectSidebar({ projectId, projectName }: ProjectSidebarProps) 
                     const isActive = pathname === link.href;
                     return (
                         <Link
-                            key={link.href}
+                            key={link.label}
                             href={link.href}
                             className={cn(
                                 "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
