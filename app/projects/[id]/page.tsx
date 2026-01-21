@@ -101,7 +101,7 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
 
             <div className="mt-8">
                 <h2 className="text-xl font-semibold text-white mb-4">Sensor Map</h2>
-                <div className="h-[500px]">
+                <div className="h-[calc(100vh-500px)] min-h-[400px]">
                     <ProjectMap sensors={sensors} projectId={id} token={session?.accessToken || ""} className="h-full shadow-2xl" />
                 </div>
             </div>

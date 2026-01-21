@@ -3,12 +3,13 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { Dashboard } from "@/types/dashboard";
 import DashboardEditor from "@/components/dashboard/DashboardEditor";
+import { getApiUrl } from "@/lib/utils";
 
 async function getDashboard(dashboardId: string) {
     const session = await auth();
     if (!session?.accessToken) return null;
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+    const apiUrl = getApiUrl();
 
     try {
         const res = await fetch(`${apiUrl}/dashboards/${dashboardId}`, {

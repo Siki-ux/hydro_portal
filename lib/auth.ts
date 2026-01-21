@@ -4,7 +4,7 @@ import Credentials from "next-auth/providers/credentials"
 import axios, { AxiosError } from "axios"
 
 // Helper to decode JWT payload safely
-function parseJwt(token: string) {
+export function parseJwt(token: string) {
     try {
         return JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
     } catch (e) {
