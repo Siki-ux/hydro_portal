@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { ArrowLeft, Download, RefreshCw, Calendar, TrendingUp, TrendingDown, Activity, Database } from "lucide-react";
+import { ArrowLeft, Download, RefreshCw, Calendar, TrendingUp, TrendingDown, Activity, Database, Layers } from "lucide-react";
 import TimeSeriesChart from "@/components/data/TimeSeriesChart";
 import { DataTable, Column } from "@/components/data/DataTable";
 import { format, subHours } from "date-fns";
@@ -19,11 +19,13 @@ export default function SensorDataPage({ params }: PageProps) {
 
     // State
     const [sensor, setSensor] = useState<any>(null);
+    const [datastreams, setDatastreams] = useState<any[]>([]);
+    const [selectedDatastream, setSelectedDatastream] = useState<string>("");
+
+    // Data State
     const [chartData, setChartData] = useState<any[]>([]);
     const [tableData, setTableData] = useState<any[]>([]);
-
-    // Statistics State
-    const [stats, setStats] = useState<any>(null);
+    const [decimationLevel, setDecimationLevel] = useState<number>(1); // 1 = Raw, 10 = 1/10, etc.
 
     // Pagination State
     const [offset, setOffset] = useState(0);
@@ -32,7 +34,7 @@ export default function SensorDataPage({ params }: PageProps) {
 
     // Initial Loading State
     const [isLoading, setIsLoading] = useState(true);
-    const [chartLoading, setChartLoading] = useState(true);
+    const [chartLoading, setChartLoading] = useState(false);
 
     // Date Range State
     // Default to last 24 hours
@@ -53,180 +55,152 @@ export default function SensorDataPage({ params }: PageProps) {
 
     const apiUrl = getApiUrl();
 
-    // Fetch Sensor Details
+    // Fetch Sensor Details & Datastreams
     const fetchSensor = useCallback(async () => {
         if (!session?.accessToken) return;
         try {
-            const res = await fetch(`${apiUrl}/projects/${id}/sensors`, {
+            const res = await fetch(`${apiUrl}/things/${sensorId}`, {
                 headers: { Authorization: `Bearer ${session.accessToken}` }
             });
             if (res.ok) {
                 const data = await res.json();
-                const found = data.find((s: any) => String(s.id) === sensorId);
-                if (found) setSensor(found);
+                setSensor(data);
+
+                const dsList = data.datastreams || [];
+                setDatastreams(dsList);
+
+                // Select first datastream by default
+                if (dsList.length > 0 && !selectedDatastream) {
+                    setSelectedDatastream(dsList[0].name);
+                }
             }
         } catch (e) {
-            console.error(e);
+            console.error("Failed to fetch sensor details", e);
         }
-    }, [apiUrl, id, sensorId, session]);
+    }, [apiUrl, sensorId, session, selectedDatastream]);
 
-    // Fetch Statistics (Total counts, global min/max)
-    const fetchStats = useCallback(async () => {
-        if (!session?.accessToken || !sensor) return;
-        try {
-            const stationId = sensor.id;
-            // Optional: pass start/end if we want stats for range, but User requested "Total Records" (implies All Time?)
-            // User said: "Total Records ... expecting 500k at minimum". "Also ... minimum and maximum for selected range and since beginning".
-            // So we need TWO stats calls or one call for global and calc local from data.
-
-            // 1. Global Stats
-            const res = await fetch(`${apiUrl}/water-data/stations/${stationId}/statistics`, {
-                headers: { Authorization: `Bearer ${session.accessToken}` }
-            });
-
-            if (res.ok) {
-                const data = await res.json();
-                setStats(data);
-            }
-        } catch (e) {
-            console.error("Failed to fetch stats", e);
-        }
-    }, [apiUrl, session, sensor]);
-
-    // Fetch Chart Data (Large chunk)
+    // Fetch Chart Data (Bulk)
     const fetchChartData = useCallback(async () => {
-        if (!session?.accessToken || !sensor) return;
+        if (!session?.accessToken || !sensorId || !selectedDatastream) return;
+
         try {
             setChartLoading(true);
-            const stationId = sensor.id;
+            const url = new URL(`${apiUrl}/things/${sensorId}/datastream/${selectedDatastream}/observations`);
+            url.searchParams.append("limit", "5000"); // Large chunk for visual
 
-            // Build query params
-            const params = new URLSearchParams({
-                id: stationId,
-                limit: "5000", // Increased limit for history
-                sort_order: "desc"
-            });
+            if (startDate) url.searchParams.append("start_time", new Date(startDate).toISOString());
+            if (endDate) url.searchParams.append("end_time", new Date(endDate).toISOString());
 
-            if (startDate) params.append("start_time", new Date(startDate).toISOString());
-            if (endDate) params.append("end_time", new Date(endDate).toISOString());
-
-            const res = await fetch(`${apiUrl}/water-data/data-points?${params.toString()}`, {
+            const res = await fetch(url.toString(), {
                 headers: { Authorization: `Bearer ${session.accessToken}` }
             });
+
             if (res.ok) {
-                const data = await res.json();
-                setChartData([...data.data_points].reverse());
+                const rawData = await res.json();
+                const mappedData = rawData.map((obs: any) => ({
+                    timestamp: obs.phenomenon_time || obs.phenomenonTime,
+                    value: obs.result,
+                    unit: '',
+                    quality_flag: 'good'
+                }));
+                const sortedData = mappedData.sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+                setChartData(sortedData);
             }
         } catch (e) {
-            console.error(e);
+            console.error("Failed to fetch chart data", e);
         } finally {
             setChartLoading(false);
         }
-    }, [apiUrl, session, sensor, startDate, endDate]);
+    }, [apiUrl, session, sensorId, selectedDatastream, startDate, endDate]);
 
     // Fetch Table Data (Paginated)
     const fetchTableData = useCallback(async (currentOffset: number) => {
-        if (!session?.accessToken || !sensor) return;
+        if (!session?.accessToken || !sensorId || !selectedDatastream) return;
+
         try {
             setIsLoadingMore(true);
-            const stationId = sensor.id;
-            const limit = 50;
+            const limit = 100;
+            const url = new URL(`${apiUrl}/things/${sensorId}/datastream/${selectedDatastream}/observations`);
+            url.searchParams.append("limit", limit.toString());
+            url.searchParams.append("offset", currentOffset.toString());
+            url.searchParams.append("order_by", "phenomenonTime desc"); // Newest first for table
 
-            const params = new URLSearchParams({
-                id: stationId,
-                limit: limit.toString(),
-                offset: currentOffset.toString(),
-                sort_order: "desc"
+            if (startDate) url.searchParams.append("start_time", new Date(startDate).toISOString());
+            if (endDate) url.searchParams.append("end_time", new Date(endDate).toISOString());
+
+            const res = await fetch(url.toString(), {
+                headers: { Authorization: `Bearer ${session.accessToken}` }
             });
-            // Table should probably mirror chart date filters? 
-            // "Data log should be limited... and scrollable". 
-            // Usually logs show everything or filtered range. Let's apply filter if set.
-            if (startDate) params.append("start_time", new Date(startDate).toISOString());
-            if (endDate) params.append("end_time", new Date(endDate).toISOString());
-
-            const res = await fetch(
-                `${apiUrl}/water-data/data-points?${params.toString()}`,
-                { headers: { Authorization: `Bearer ${session.accessToken}` } }
-            );
 
             if (res.ok) {
-                const data = await res.json();
-                const newPoints = data.data_points;
+                const rawData = await res.json();
+                const mappedData = rawData.map((obs: any) => ({
+                    timestamp: obs.phenomenon_time || obs.phenomenonTime,
+                    value: obs.result,
+                    unit: '',
+                    quality_flag: 'good'
+                }));
 
-                if (newPoints.length < limit) {
+                if (mappedData.length < limit) {
                     setHasMore(false);
                 }
 
-                setTableData(prev => currentOffset === 0 ? newPoints : [...prev, ...newPoints]);
+                setTableData(prev => currentOffset === 0 ? mappedData : [...prev, ...mappedData]);
                 setOffset(currentOffset + limit);
             }
         } catch (e) {
-            console.error(e);
+            console.error("Failed to fetch table data", e);
         } finally {
             setIsLoadingMore(false);
             setIsLoading(false);
         }
-    }, [apiUrl, session, sensor, startDate, endDate]);
+    }, [apiUrl, session, sensorId, selectedDatastream, startDate, endDate]);
 
     // Initial Load
     useEffect(() => {
         fetchSensor();
     }, [fetchSensor]);
 
-    // Load Data once Sensor is found
+    // Main Fetch Trigger (Filters/Selection Change)
     useEffect(() => {
-        if (sensor) {
-            fetchStats();
+        if (selectedDatastream) {
             fetchChartData();
             // Reset table
             setOffset(0);
             setHasMore(true);
+            setTableData([]);
             fetchTableData(0);
         }
-    }, [sensor]);
-    // Note: Changing start/end date DOES NOT auto-trigger. User must click Refresh or "Apply".
-    // Or we can add them to deps. User request: "let user set time from to".
-    // Usually explicit "Update" button is better for date ranges to avoid double fetch.
-    // I will hook it to the Refresh button or adding an "Apply" button.
-    // The existing "refresh" button calls both.
+    }, [selectedDatastream]);
 
-    // Manual Refresh
-    const handleRefresh = () => {
-        fetchStats();
+
+    const handleApplyFilters = () => {
         fetchChartData();
         setOffset(0);
         setHasMore(true);
+        setTableData([]);
         fetchTableData(0);
     };
 
-    // Calculate Range Stats (from Chart Data)
-    const rangeStats = useMemo(() => {
-        if (!chartData || chartData.length === 0) return { min: null, max: null, avg: null };
+    const handleRefresh = handleApplyFilters;
+
+    // Decimated Data for Chart
+    const displayedChartData = useMemo(() => {
+        if (decimationLevel === 1) return chartData;
+        return chartData.filter((_, index) => index % decimationLevel === 0);
+    }, [chartData, decimationLevel]);
+
+    // Stats (from ALL loaded chart data)
+    const stats = useMemo(() => {
+        if (!chartData || chartData.length === 0) return { min: null, max: null, avg: null, count: 0 };
         const values = chartData.map(d => d.value);
         const min = Math.min(...values);
         const max = Math.max(...values);
         const avg = values.reduce((a, b) => a + b, 0) / values.length;
-        return { min, max, avg };
+        const count = values.length;
+        return { min, max, avg, count };
     }, [chartData]);
 
-    // Global Stats (from API)
-    const globalStats = useMemo(() => {
-        if (!stats || !stats.statistics) return { min: null, max: null, count: null };
-        return {
-            min: stats.statistics.min,
-            max: stats.statistics.max,
-            count: stats.total_measurements
-        };
-    }, [stats]);
-
-    // Handle Y-Axis manual input
-    const handleYAxisChange = () => {
-        if (yMinInput.trim() === "") setYMin("auto");
-        else setYMin(Number(yMinInput));
-
-        if (yMaxInput.trim() === "") setYMax("auto");
-        else setYMax(Number(yMaxInput));
-    };
 
     // Columns
     const columns: Column<any>[] = useMemo(() => [
@@ -245,23 +219,9 @@ export default function SensorDataPage({ params }: PageProps) {
         {
             header: "Unit",
             accessorKey: "unit",
-        },
-        {
-            header: "Parameter",
-            accessorKey: "parameter",
-            cell: (item) => <span className="capitalize">{item.parameter?.replace("_", " ")}</span>
-        },
-        {
-            header: "Quality",
-            accessorKey: "quality_flag",
-            cell: (item) => (
-                <span className={`px-2 py-0.5 rounded text-xs ${item.quality_flag === 'good' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
-                    }`}>
-                    {item.quality_flag}
-                </span>
-            )
+            cell: () => <span className="text-white/50">{datastreams.find(d => d.name === selectedDatastream)?.unit || '-'}</span>
         }
-    ], []);
+    ], [datastreams, selectedDatastream]);
 
     if (!session) return null;
 
@@ -279,11 +239,11 @@ export default function SensorDataPage({ params }: PageProps) {
                     <div>
                         <h1 className="text-2xl font-bold text-white flex items-center gap-3">
                             {sensor?.name || "Loading..."}
-                            <span className={`text-xs px-2 py-0.5 rounded-full border ${sensor?.status === 'active'
+                            <span className={`text-xs px-2 py-0.5 rounded-full border ${sensor?.properties?.status === 'active'
                                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                                 : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
                                 }`}>
-                                {sensor?.status || "..."}
+                                {sensor?.properties?.status || "Active"}
                             </span>
                         </h1>
                         <p className="text-white/60 text-sm">{sensor?.description || "Sensor Data History"}</p>
@@ -295,7 +255,7 @@ export default function SensorDataPage({ params }: PageProps) {
                         className="p-2 bg-white/5 hover:bg-white/10 text-white rounded-lg border border-white/10 transition-colors"
                         title="Refresh Data"
                     >
-                        <RefreshCw className={`w-5 h-5 ${chartLoading || isLoadingMore ? "animate-spin" : ""}`} />
+                        <RefreshCw className={`w-5 h-5 ${chartLoading ? "animate-spin" : ""}`} />
                     </button>
                     <button className="flex items-center gap-2 px-4 py-2 bg-hydro-primary text-black font-semibold rounded-lg hover:bg-hydro-accent transition-colors">
                         <Download className="w-4 h-4" />
@@ -312,11 +272,42 @@ export default function SensorDataPage({ params }: PageProps) {
                     <div className="flex flex-wrap justify-between items-end mb-4 gap-4">
                         <div className="flex flex-col">
                             <h2 className="text-lg font-semibold text-white">Historical Trends</h2>
-                            <span className="text-white/40 text-xs">Last 24h (Default)</span>
+                            <div className="flex items-center gap-2 mt-1">
+                                {datastreams.length > 0 && (
+                                    <select
+                                        value={selectedDatastream}
+                                        onChange={(e) => setSelectedDatastream(e.target.value)}
+                                        className="bg-black/20 border border-white/10 rounded text-xs text-white px-2 py-1 outline-none focus:border-hydro-primary"
+                                    >
+                                        {datastreams.map((ds: any) => (
+                                            <option key={ds.name} value={ds.name} className="bg-gray-900 text-white">
+                                                {ds.label || ds.name} ({ds.unit})
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
+                            </div>
                         </div>
 
                         {/* Filter Controls */}
                         <div className="flex flex-wrap items-center gap-2 text-sm bg-black/20 p-2 rounded-lg border border-white/5">
+                            {/* Resolution Control */}
+                            <div className="flex flex-col gap-1 w-24">
+                                <label className="text-xs text-white/50 px-1 flex items-center gap-1"><Layers className="w-3 h-3" /> Res</label>
+                                <select
+                                    value={decimationLevel}
+                                    onChange={(e) => setDecimationLevel(Number(e.target.value))}
+                                    className="bg-white/5 border border-white/10 rounded px-2 py-1 text-white text-xs focus:ring-1 focus:ring-hydro-primary outline-none"
+                                >
+                                    <option value={1} className="bg-gray-900">Native</option>
+                                    <option value={5} className="bg-gray-900">1:5</option>
+                                    <option value={10} className="bg-gray-900">1:10</option>
+                                    <option value={60} className="bg-gray-900">1:60</option>
+                                </select>
+                            </div>
+
+                            <div className="h-8 w-px bg-white/10 mx-2"></div>
+
                             <div className="flex flex-col gap-1">
                                 <label className="text-xs text-white/50 px-1 flex items-center gap-1"><Calendar className="w-3 h-3" /> From</label>
                                 <input
@@ -367,7 +358,7 @@ export default function SensorDataPage({ params }: PageProps) {
                                 </div>
                             </div>
                             <button
-                                onClick={handleRefresh}
+                                onClick={handleApplyFilters}
                                 className="ml-2 px-3 py-1 bg-hydro-primary/20 hover:bg-hydro-primary/30 text-hydro-primary text-xs rounded transition-colors self-end h-7 border border-hydro-primary/30"
                             >
                                 Apply
@@ -376,60 +367,77 @@ export default function SensorDataPage({ params }: PageProps) {
                     </div>
 
                     <div className="h-[400px]">
-                        {chartLoading && chartData.length === 0 ? (
-                            <div className="h-full flex items-center justify-center text-white/30">Loading Chart...</div>
+                        {chartLoading ? (
+                            <div className="h-full flex items-center justify-center text-white/30">
+                                <Activity className="w-6 h-6 animate-spin mr-2" /> Loading data...
+                            </div>
+                        ) : displayedChartData.length === 0 ? (
+                            <div className="h-full flex items-center justify-center text-white/30">No data available</div>
                         ) : (
                             <TimeSeriesChart
-                                data={chartData}
-                                unit={chartData[0]?.unit || ""}
-                                parameter={sensor?.parameter}
+                                series={[
+                                    {
+                                        name: sensor?.name || "Value",
+                                        label: selectedDatastream,
+                                        color: "#10b981", // Primary emerald color
+                                        unit: datastreams.find(d => d.name === selectedDatastream)?.unit || "",
+                                        data: displayedChartData
+                                    }
+                                ]}
                                 yMin={yMin}
                                 yMax={yMax}
                             />
                         )}
+                        <div className="absolute top-2 right-2 text-[10px] text-white/20">
+                            Showing {displayedChartData.length} pts (Decimation: {decimationLevel}x)
+                        </div>
                     </div>
                 </div>
 
                 {/* 2. Stats Section */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
-                    {/* Range Stats */}
                     <div className="bg-white/5 border border-white/10 rounded-lg p-4">
                         <div className="text-white/40 text-xs uppercase tracking-wider mb-1 flex items-center gap-2">
-                            <TrendingDown className="w-3 h-3" /> Min (Range)
+                            <TrendingDown className="w-3 h-3" /> Min (Loaded)
                         </div>
                         <div className="text-xl font-bold text-white">
-                            {rangeStats.min !== null ? rangeStats.min.toFixed(2) : "-"}
-                            <span className="text-sm font-normal text-white/30 ml-1">{chartData[0]?.unit}</span>
+                            {stats.min !== null ? stats.min.toFixed(2) : "-"}
+                            <span className="text-sm font-normal text-white/30 ml-1">
+                                {datastreams.find(d => d.name === selectedDatastream)?.unit || ""}
+                            </span>
                         </div>
                     </div>
                     <div className="bg-white/5 border border-white/10 rounded-lg p-4">
                         <div className="text-white/40 text-xs uppercase tracking-wider mb-1 flex items-center gap-2">
-                            <TrendingUp className="w-3 h-3" /> Max (Range)
+                            <TrendingUp className="w-3 h-3" /> Max (Loaded)
                         </div>
                         <div className="text-xl font-bold text-white">
-                            {rangeStats.max !== null ? rangeStats.max.toFixed(2) : "-"}
-                            <span className="text-sm font-normal text-white/30 ml-1">{chartData[0]?.unit}</span>
+                            {stats.max !== null ? stats.max.toFixed(2) : "-"}
+                            <span className="text-sm font-normal text-white/30 ml-1">
+                                {datastreams.find(d => d.name === selectedDatastream)?.unit || ""}
+                            </span>
                         </div>
                     </div>
                     <div className="bg-white/5 border border-white/10 rounded-lg p-4">
                         <div className="text-white/40 text-xs uppercase tracking-wider mb-1 flex items-center gap-2">
-                            <Activity className="w-3 h-3" /> Latest Value
+                            <Activity className="w-3 h-3" /> Avg (Loaded)
                         </div>
                         <div className="text-xl font-bold text-emerald-400">
-                            {chartData[chartData.length - 1]?.value?.toFixed(2) || "-"}
-                            <span className="text-sm font-normal text-white/30 ml-1">{chartData[0]?.unit}</span>
+                            {stats.avg !== null ? stats.avg.toFixed(2) : "-"}
+                            <span className="text-sm font-normal text-white/30 ml-1">
+                                {datastreams.find(d => d.name === selectedDatastream)?.unit || ""}
+                            </span>
                         </div>
                     </div>
                     <div className="bg-white/5 border border-white/10 rounded-lg p-4">
                         <div className="text-white/40 text-xs uppercase tracking-wider mb-1 flex items-center gap-2">
-                            <Database className="w-3 h-3" /> Total Records
+                            <Database className="w-3 h-3" /> Total Loaded
                         </div>
                         <div className="text-xl font-bold text-white">
-                            {globalStats.count !== null ? globalStats.count.toLocaleString() : "Loading..."}
+                            {stats.count.toLocaleString()}
                         </div>
-                        <div className="text-[10px] text-white/30 mt-1 flex justify-between">
-                            <span>All Time Min: {globalStats.min?.toFixed(1) || "-"}</span>
-                            <span>Max: {globalStats.max?.toFixed(1) || "-"}</span>
+                        <div className="text-[10px] text-white/30 truncate">
+                            Limited to 5k for perf. Use filters for more.
                         </div>
                     </div>
                 </div>
@@ -440,6 +448,7 @@ export default function SensorDataPage({ params }: PageProps) {
                         <h2 className="text-lg font-semibold text-white">Data Log</h2>
                     </div>
                     <div className="flex-1 overflow-hidden p-2 relative">
+                        {/* Infinite Scroll Table */}
                         <DataTable
                             columns={columns}
                             data={tableData}

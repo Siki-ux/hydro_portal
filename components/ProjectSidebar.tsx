@@ -10,9 +10,12 @@ import {
     ChevronLeft,
     Activity,
     FileCode,
-    Bell
+    Bell,
+    Zap
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 
 interface ProjectSidebarProps {
     projectId: string;
@@ -21,16 +24,44 @@ interface ProjectSidebarProps {
 
 export function ProjectSidebar({ projectId, projectName }: ProjectSidebarProps) {
     const pathname = usePathname();
+    const { data: session } = useSession();
+    const [showSimulator, setShowSimulator] = useState(false);
+
+    useEffect(() => {
+        if (session?.accessToken && projectId) {
+            const checkSimulatorAccess = async () => {
+                try {
+                    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+                    const res = await fetch(`${apiUrl}/projects/${projectId}/simulator/status`, {
+                        headers: {
+                            "Authorization": `Bearer ${session.accessToken}`
+                        }
+                    });
+                    if (res.ok) {
+                        setShowSimulator(true);
+                    }
+                } catch (e) {
+                    console.error("Failed to check simulator access", e);
+                }
+            };
+            checkSimulatorAccess();
+        }
+    }, [projectId, session]);
 
     const links = [
         { label: "Overview", icon: Activity, href: `/projects/${projectId}` },
         { label: "Dashboards", icon: LayoutDashboard, href: `/projects/${projectId}/dashboards` },
         { label: "Map", icon: MapIcon, href: `/projects/${projectId}` },
         { label: "Data", icon: Database, href: `/projects/${projectId}/data` },
+        { label: "Parsers", icon: FileCode, href: `/projects/${projectId}/parsers` },
         { label: "Computations", icon: FileCode, href: `/projects/${projectId}/computations` },
         { label: "Alerts", icon: Bell, href: `/projects/${projectId}/alerts` },
         { label: "Settings", icon: Settings, href: `/projects/${projectId}/settings` },
     ];
+
+    if (showSimulator) {
+        links.splice(5, 0, { label: "Simulator", icon: Zap, href: `/projects/${projectId}/simulator` });
+    }
 
     return (
         <aside className="w-64 fixed left-0 top-16 bottom-0 border-r border-white/10 bg-black/20 backdrop-blur-md z-40 hidden md:flex flex-col">

@@ -23,19 +23,49 @@ async function getProject(id: string) {
 
 async function getProjectSensors(id: string) {
     const session = await auth();
-    if (!session?.accessToken) return [];
+    if (!session?.accessToken) return { sensors: [], error: "No session" };
 
     const apiUrl = getApiUrl();
+    console.log(`[ProjectMap] Fetching sensors from: ${apiUrl}/projects/${id}/sensors`);
 
     try {
         const res = await fetch(`${apiUrl}/projects/${id}/sensors`, {
             headers: { Authorization: `Bearer ${session.accessToken}` },
             cache: 'no-store'
         });
-        if (!res.ok) return [];
-        return await res.json() as Sensor[];
-    } catch {
-        return [];
+
+        if (!res.ok) {
+            const errorText = await res.text();
+            console.error(`[ProjectMap] Failed to fetch sensors. Status: ${res.status}. Response: ${errorText}`);
+            return { sensors: [], error: `API Error: ${res.status} ${res.statusText}` };
+        }
+
+        const things: any[] = await res.json();
+        console.log(`[ProjectMap] Fetched ${things.length} sensors.`);
+
+        // Map API 'Thing' -> Frontend 'Sensor'
+        const sensors = things.map(t => {
+            const lat = t.location?.coordinates?.latitude || 0;
+            const lng = t.location?.coordinates?.longitude || 0;
+
+            return {
+                uuid: t.sensor_uuid,
+                id: t.thing_id || t.sensor_uuid,
+                name: t.name,
+                description: t.description,
+                latitude: lat,
+                longitude: lng,
+                status: 'active', // Force active as requested
+                datastreams: t.datastreams || [],
+                properties: t.properties
+            } as Sensor;
+        });
+
+        return { sensors, error: null };
+
+    } catch (e: any) {
+        console.error("[ProjectMap] Error fetching sensors:", e);
+        return { sensors: [], error: `Network Error: ${e?.message || String(e)}` };
     }
 }
 
@@ -43,7 +73,7 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
     const session = await auth();
     const { id } = await params;
     const project = await getProject(id);
-    const sensors = await getProjectSensors(id);
+    const { sensors, error: sensorError } = await getProjectSensors(id);
 
     if (!project) {
         return <div className="text-red-400">Project not found or access denied.</div>;
@@ -83,6 +113,13 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
         <div className="space-y-6">
             <h1 className="text-2xl font-bold text-white">{project.name}</h1>
             <p className="text-white/60">{project.description || "No description provided."}</p>
+
+            {sensorError && (
+                <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-200 text-sm">
+                    <strong>Warning:</strong> Could not load sensors. {sensorError}
+                    <div className="text-xs opacity-70 mt-1">API URL: {getApiUrl()}</div>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
                 <div className="p-6 rounded-xl bg-white/5 border border-white/10">

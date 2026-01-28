@@ -11,38 +11,27 @@ export default async function NewProjectPage() {
 
     let userGroups: string[] = [];
     if (session.accessToken) {
-        const decoded = parseJwt(session.accessToken);
-        if (decoded) {
-            const rawGroups = [];
-
-            // Keycloak Groups
-            if (decoded.groups) {
-                if (Array.isArray(decoded.groups)) rawGroups.push(...decoded.groups);
-                else rawGroups.push(decoded.groups);
-            }
-
-            // Realm Roles (also valid for authorization)
-            if (decoded.realm_access && decoded.realm_access.roles) {
-                rawGroups.push(...decoded.realm_access.roles);
-            }
-
-            // Deduplicate and sanitize
-            const unique = new Set<string>();
-            rawGroups.forEach((g: any) => {
-                let s = String(g);
-
-                if (s.startsWith("urn:geant:params:group:")) {
-                    s = s.replace("urn:geant:params:group:", "");
-                }
-
-                // Remove leading slash from Keycloak group paths
-                if (s.startsWith("/")) s = s.substring(1);
-
-                // Filter out empty or effectively empty strings
-                if (s && s.trim().length > 0) unique.add(s);
+        try {
+            const apiUrl = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+            const res = await fetch(`${apiUrl}/groups/my-authorization-groups`, {
+                headers: {
+                    "Authorization": `Bearer ${session.accessToken}`
+                },
+                cache: 'no-store'
             });
 
-            userGroups = Array.from(unique).sort();
+            if (res.ok) {
+                const groups = await res.json();
+                // We expect a list of objects {id, name, path?}. Form expects string[] for now.
+                // We will map to names.
+                if (Array.isArray(groups)) {
+                    userGroups = groups.map((g: any) => g.name || g.path).sort();
+                }
+            } else {
+                console.error("Failed to fetch authorization groups", res.status);
+            }
+        } catch (e) {
+            console.error("Error fetching authorization groups", e);
         }
     }
 

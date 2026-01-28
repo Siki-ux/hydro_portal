@@ -20,18 +20,22 @@ interface DataPoint {
     value: number;
 }
 
-interface TimeSeriesChartProps {
+interface Series {
+    name: string;
+    label: string;
+    color: string;
+    unit: string;
     data: DataPoint[];
-    unit?: string;
-    parameter?: string;
+}
+
+interface TimeSeriesChartProps {
+    series: Series[];
     yMin?: number | "auto";
     yMax?: number | "auto";
 }
 
 export default function TimeSeriesChart({
-    data,
-    unit,
-    parameter,
+    series,
     yMin = "auto",
     yMax = "auto",
 }: TimeSeriesChartProps) {
@@ -51,25 +55,22 @@ export default function TimeSeriesChart({
     const [refAreaTop, setRefAreaTop] = useState<string | number>("");
     const [refAreaBottom, setRefAreaBottom] = useState<string | number>("");
 
-    if (!data || data.length === 0) {
-        return (
-            <div className="h-64 flex items-center justify-center text-white/30 bg-white/5 rounded-lg border border-white/5">
-                No data available for the selected period.
-            </div>
-        );
-    }
-
-    // Recharts renders in order of array.
-    // Map to numeric timestamp for easier domain math
+    // Merge data from all series for a combined X-axis
     const chartData = useMemo(() => {
-        return [...data]
-            .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-            .map(d => ({
-                ...d,
-                time: new Date(d.timestamp).getTime(),
-                originalTimestamp: d.timestamp
-            }));
-    }, [data]);
+        const timeMap: Record<number, any> = {};
+
+        series.forEach(s => {
+            s.data.forEach(d => {
+                const time = new Date(d.timestamp).getTime();
+                if (!timeMap[time]) {
+                    timeMap[time] = { time, originalTimestamp: d.timestamp };
+                }
+                timeMap[time][s.name] = d.value;
+            });
+        });
+
+        return Object.values(timeMap).sort((a: any, b: any) => a.time - b.time);
+    }, [series]);
 
     const zoom = () => {
         let l = refAreaLeft;
@@ -85,34 +86,22 @@ export default function TimeSeriesChart({
         if (typeof l !== "number" || typeof r !== "number") return;
         if (l > r) [l, r] = [r, l];
 
-        // Find data in range to determine Y domain (if auto scaling is desired on zoom)
-        // But if manual Y is set, maybe we should respect it?
-        // Behavior: Zooming usually implies "zoom into this box", so we should respect the box's Y if provided.
-        // If the user did 1D zoom (X only), we might auto-scale Y or keep manual Y.
-        // Current logic:
+        // 1D Zoom (X only) - Auto scale based on visible series
+        const dataInRange = chartData.filter((d: any) => d.time >= l && d.time <= r);
+        if (dataInRange.length > 0) {
+            const allValues: number[] = [];
+            series.forEach(s => {
+                dataInRange.forEach((d: any) => {
+                    if (d[s.name] !== undefined) allValues.push(d[s.name]);
+                });
+            });
 
-        // Check if Y-selection was made
-        let minVal: number | "auto" = bottom as any;
-        let maxVal: number | "auto" = top as any;
-
-        // If drag box had Y component
-        if (refAreaBottom !== "" && refAreaTop !== "") {
-            let b = Number(refAreaBottom);
-            let t = Number(refAreaTop);
-            if (b > t) [b, t] = [t, b];
-            minVal = b;
-            maxVal = t;
-        } else {
-            // 1D Zoom (X only) - Auto scale usually desirable here unless locked
-            // For now, let's Auto-scale Y to fit data in X-range
-            const dataInRange = chartData.filter(d => d.time >= l && d.time <= r);
-            if (dataInRange.length > 0) {
-                const values = dataInRange.map(d => d.value);
-                let vMin = Math.min(...values);
-                let vMax = Math.max(...values);
-                const padding = (vMax - vMin) * 0.05;
-                minVal = vMin - padding;
-                maxVal = vMax + padding;
+            if (allValues.length > 0) {
+                let vMin = Math.min(...allValues);
+                let vMax = Math.max(...allValues);
+                const padding = (vMax - vMin) * 0.1 || 1;
+                setBottom(vMin - padding);
+                setTop(vMax + padding);
             }
         }
 
@@ -123,8 +112,6 @@ export default function TimeSeriesChart({
 
         setLeft(l);
         setRight(r);
-        setBottom(minVal);
-        setTop(maxVal);
     };
 
     const zoomOut = () => {
@@ -134,12 +121,20 @@ export default function TimeSeriesChart({
         setBottom(yMin);
     };
 
+    if (series.length === 0 || chartData.length === 0) {
+        return (
+            <div className="h-64 flex items-center justify-center text-white/30 bg-white/5 rounded-lg border border-white/5">
+                No data available for the selected datastreams.
+            </div>
+        );
+    }
+
     return (
         <div className="w-full h-80 relative select-none">
             {left !== "dataMin" && (
                 <button
                     onClick={zoomOut}
-                    className="absolute top-2 right-2 z-10 flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 rounded-md hover:bg-indigo-500 shadow-sm transition-all"
+                    className="absolute top-2 right-2 z-10 flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-white bg-hydro-primary rounded-md hover:filter hover:brightness-110 shadow-sm transition-all"
                 >
                     <ZoomOut className="w-3 h-3" />
                     Reset Zoom
@@ -149,79 +144,60 @@ export default function TimeSeriesChart({
             <ResponsiveContainer width="100%" height="100%">
                 <LineChart
                     data={chartData}
-                    onMouseDown={(e: any) => {
-                        if (e && e.activeLabel) {
-                            setRefAreaLeft(e.activeLabel);
-                            if (e.activePayload && e.activePayload[0]) {
-                                setRefAreaBottom(e.activePayload[0].payload.value);
-                            } else {
-                                setRefAreaBottom("");
-                            }
-                        }
-                    }}
-                    onMouseMove={(e: any) => {
-                        if (refAreaLeft && e && e.activeLabel) {
-                            setRefAreaRight(e.activeLabel);
-                            if (e.activePayload && e.activePayload[0]) {
-                                setRefAreaTop(e.activePayload[0].payload.value);
-                            } else {
-                                setRefAreaTop("");
-                            }
-                        }
-                    }}
+                    onMouseDown={(e: any) => e && e.activeLabel && setRefAreaLeft(e.activeLabel)}
+                    onMouseMove={(e: any) => refAreaLeft && e && e.activeLabel && setRefAreaRight(e.activeLabel)}
                     onMouseUp={zoom}
-                    onDoubleClick={zoomOut}
                 >
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                     <XAxis
                         dataKey="time"
                         type="number"
                         domain={[left, right]}
                         tickFormatter={(val) => format(new Date(val), "MM/dd HH:mm")}
-                        stroke="rgba(255,255,255,0.5)"
-                        tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 12 }}
+                        stroke="rgba(255,255,255,0.3)"
+                        tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 10 }}
                         allowDataOverflow
                     />
                     <YAxis
                         domain={[bottom, top]}
-                        stroke="rgba(255,255,255,0.5)"
-                        tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 12 }}
-                        label={{
-                            value: unit,
-                            angle: -90,
-                            position: "insideLeft",
-                            fill: "rgba(255,255,255,0.5)",
-                        }}
+                        stroke="rgba(255,255,255,0.3)"
+                        tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 10 }}
+                        tickFormatter={(val) => new Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(val)}
                         allowDataOverflow
+                        width={40}
                     />
                     <Tooltip
                         contentStyle={{
-                            backgroundColor: "#1a1a1a",
+                            backgroundColor: "#0a0a0a",
                             border: "1px solid rgba(255,255,255,0.1)",
-                            borderRadius: "8px",
+                            borderRadius: "12px",
+                            padding: "12px",
+                            boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.5)"
                         }}
-                        labelStyle={{ color: "rgba(255,255,255,0.7)" }}
-                        labelFormatter={(label) => format(new Date(label), "MMM d, yyyy HH:mm")}
+                        itemStyle={{ fontSize: "12px", padding: "2px 0" }}
+                        labelStyle={{ color: "rgba(255,255,255,0.4)", fontSize: "10px", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em" }}
+                        labelFormatter={(label) => format(new Date(label), "MMM d, yyyy HH:mm:ss")}
                     />
-                    <Line
-                        type="monotone"
-                        dataKey="value"
-                        stroke="#10b981" // Green-500 equivalent
-                        strokeWidth={2}
-                        dot={false}
-                        activeDot={{ r: 6, fill: "#10b981" }}
-                        name={parameter || "Value"}
-                        animationDuration={300}
-                    />
+                    {series.map(s => (
+                        <Line
+                            key={s.name}
+                            type="monotone"
+                            dataKey={s.name}
+                            stroke={s.color}
+                            strokeWidth={2}
+                            dot={false}
+                            activeDot={{ r: 4, strokeWidth: 0 }}
+                            name={s.label}
+                            animationDuration={300}
+                            connectNulls
+                        />
+                    ))}
                     {refAreaLeft && refAreaRight ? (
                         <ReferenceArea
                             x1={refAreaLeft}
                             x2={refAreaRight}
-                            y1={refAreaBottom !== "" ? refAreaBottom : undefined}
-                            y2={refAreaTop !== "" ? refAreaTop : undefined}
                             strokeOpacity={0.3}
-                            fill="#10b981"
-                            fillOpacity={0.1}
+                            fill="rgba(255,255,255,0.1)"
                         />
                     ) : null}
                 </LineChart>

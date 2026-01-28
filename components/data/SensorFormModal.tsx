@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 
 interface SensorFormModalProps {
     isOpen: boolean;
@@ -9,6 +10,7 @@ interface SensorFormModalProps {
     initialData?: any;
     mode: "create" | "edit";
     defaultType?: string;
+    projectId?: string; // Added for Parser fetching
 }
 
 const CustomSelect = ({ label, value, options, onChange, direction = "down" }: any) => {
@@ -32,7 +34,7 @@ const CustomSelect = ({ label, value, options, onChange, direction = "down" }: a
                     onClick={() => setIsOpen(!isOpen)}
                     className="w-full bg-[#0a0a0a] border border-white/10 rounded px-3 py-2 text-white text-left focus:outline-none focus:border-hydro-primary flex justify-between items-center"
                 >
-                    <span>{selectedOption?.label || value}</span>
+                    <span>{selectedOption?.label || value || "Select..."}</span>
                     <span className="text-white/50 text-xs">▼</span>
                 </button>
 
@@ -66,8 +68,10 @@ export default function SensorFormModal({
     onSubmit,
     initialData,
     mode,
-    defaultType
+    defaultType,
+    projectId
 }: SensorFormModalProps) {
+    const { data: session } = useSession();
     const [formData, setFormData] = useState({
         id: "",
         name: "",
@@ -77,10 +81,12 @@ export default function SensorFormModal({
         elevation: "",
         status: "active",
         organization: "",
-        station_type: "river"
+        station_type: "river",
+        parser_id: null as number | null
     });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+    const [parsers, setParsers] = useState<any[]>([]);
 
     useEffect(() => {
         if (initialData && mode === "edit") {
@@ -93,7 +99,8 @@ export default function SensorFormModal({
                 elevation: initialData.elevation || "",
                 status: initialData.status || "active",
                 organization: initialData.properties?.organization || initialData.organization || "",
-                station_type: initialData.station_type || "river"
+                station_type: initialData.station_type || "river",
+                parser_id: null // Edit mode usually doesn't change parser easily yet
             });
         } else {
             // Reset for create
@@ -106,11 +113,47 @@ export default function SensorFormModal({
                 elevation: "",
                 status: "active",
                 organization: "",
-                station_type: defaultType || "river"
+                station_type: defaultType || "river",
+                parser_id: null
             });
         }
         setError("");
     }, [initialData, mode, isOpen, defaultType]);
+
+    // Fetch Parsers
+    useEffect(() => {
+        if (isOpen && mode === "create" && projectId && session?.accessToken) {
+            const fetchParsers = async () => {
+                try {
+                    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+
+                    // 1. Get Project Group ID (Needed for list_parsers filtering)
+                    // We assume projectId passed is the UUID or ID.
+                    // The backend `list_parsers` creates a filter.
+                    // Ideally we should just get all parsers for the project group.
+                    // We can reuse the same logic as ParsersPage: First get project to get group_id.
+
+                    const projectRes = await fetch(`${apiUrl}/projects/${projectId}`, {
+                        headers: { Authorization: `Bearer ${session.accessToken}` }
+                    });
+                    if (!projectRes.ok) return;
+                    const project = await projectRes.json();
+                    const groupId = project.authorization_provider_group_id;
+
+                    const res = await fetch(`${apiUrl}/parsers?group_id=${groupId}`, {
+                        headers: { Authorization: `Bearer ${session.accessToken}` }
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        setParsers(data);
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch parsers", e);
+                }
+            };
+            fetchParsers();
+        }
+    }, [isOpen, mode, projectId, session?.accessToken]);
 
     if (!isOpen) return null;
 
@@ -128,7 +171,8 @@ export default function SensorFormModal({
                 elevation: formData.elevation ? parseFloat(formData.elevation) : null,
                 properties: {
                     organization: formData.organization
-                }
+                },
+                parser_id: formData.parser_id ? Number(formData.parser_id) : null
             };
             await onSubmit(payload);
             onClose();
@@ -155,6 +199,11 @@ export default function SensorFormModal({
         { value: "spring", label: "Spring" },
         { value: "dataset", label: "Dataset (Virtual)" },
         { value: "other", label: "Other" }
+    ];
+
+    const parserOptions = [
+        { value: null, label: "None (No Ingestion)" },
+        ...parsers.map(p => ({ value: p.id, label: p.name }))
     ];
 
     return (
@@ -270,6 +319,19 @@ export default function SensorFormModal({
                             direction="up"
                         />
                     </div>
+
+                    {mode === "create" && (
+                        <div className="border-t border-white/10 pt-4">
+                            <CustomSelect
+                                label="Link Parser (Ingestion)"
+                                value={formData.parser_id}
+                                options={parserOptions}
+                                onChange={(val: any) => setFormData({ ...formData, parser_id: val })}
+                                direction="up"
+                            />
+                            <p className="text-xs text-white/40 mt-1">Select a parser to enable automatic file ingestion (Can be done later).</p>
+                        </div>
+                    )}
 
                     <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
                         <button

@@ -1,7 +1,7 @@
-
 import NextAuth, { User } from "next-auth"
 import Credentials from "next-auth/providers/credentials"
-import axios, { AxiosError } from "axios"
+import axios from "axios"
+import { JWT } from "next-auth/jwt"
 
 // Helper to decode JWT payload safely
 export function parseJwt(token: string) {
@@ -13,6 +13,40 @@ export function parseJwt(token: string) {
 }
 
 import { getApiUrl } from "./utils"
+
+// Helper to refresh access token
+async function refreshAccessToken(token: JWT): Promise<JWT> {
+    try {
+        const apiUrl = getApiUrl()
+
+        // POST /auth/refresh
+        const response = await axios.post(`${apiUrl}/auth/refresh`, {
+            refresh_token: token.refreshToken
+        })
+
+        if (!response.data || !response.data.access_token) {
+            throw new Error("Refresh failed");
+        }
+
+        const refreshedTokens = response.data
+
+        return {
+            ...token,
+            accessToken: refreshedTokens.access_token,
+            expiresAt: Math.floor(Date.now() / 1000) + refreshedTokens.expires_in,
+            // Fall back to old refresh token if new one is not provided (some implementations rotate, some don't)
+            refreshToken: refreshedTokens.refresh_token ?? token.refreshToken,
+        }
+
+    } catch (error) {
+        console.error("Error refreshing access token", error)
+
+        return {
+            ...token,
+            error: "RefreshAccessTokenError",
+        }
+    }
+}
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
     providers: [
@@ -40,9 +74,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     })
 
                     if (response.data && response.data.access_token) {
-                        const token = response.data.access_token;
+                        const data = response.data;
+                        const token = data.access_token;
                         const decoded = parseJwt(token);
-                        // Use 'sub' from JWT as ID, fallback to '1' if missing (unlikely)
                         const userId = decoded?.sub || "1";
 
                         return {
@@ -50,6 +84,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                             name: credentials.username as string,
                             email: "",
                             accessToken: token,
+                            refreshToken: data.refresh_token,
+                            expiresIn: data.expires_in,
+                            expiresAt: Math.floor(Date.now() / 1000) + data.expires_in
                         }
                     }
 
@@ -71,14 +108,31 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         signIn: '/auth/signin',
     },
     callbacks: {
-        async jwt({ token, user }) {
-            if (user) {
-                token.accessToken = (user as any).accessToken
+        async jwt({ token, user, account }) {
+            // Initial sign in
+            if (user && account) {
+                return {
+                    accessToken: user.accessToken,
+                    refreshToken: user.refreshToken,
+                    expiresAt: user.expiresAt, // Unix timestamp
+                    user: user
+                }
             }
-            return token
+
+            // Return previous token if the access token has not expired yet
+            // Subtracting 10 seconds for safety margin
+            if (token.expiresAt && Date.now() < ((token.expiresAt as number) * 1000 - 10000)) {
+                return token
+            }
+
+            // Access token has expired, try to update it
+            return refreshAccessToken(token)
         },
         async session({ session, token }) {
-            (session as any).accessToken = token.accessToken
+            session.accessToken = token.accessToken as string | undefined
+            session.refreshToken = token.refreshToken as string | undefined
+            session.expiresAt = token.expiresAt as number | undefined
+            session.error = token.error as string | undefined
             return session
         }
     }

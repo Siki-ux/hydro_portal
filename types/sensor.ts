@@ -1,12 +1,21 @@
 export interface SensorDataPoint {
-    parameter: string;
+    parameter?: string; // Legacy
+    datastream?: string; // New
     value: number | string | null;
     unit: string;
     timestamp: string;
 }
 
+export interface DatastreamMetadata {
+    name: string;
+    unit: string;
+    label: string;
+    properties?: any;
+}
+
 export interface Sensor {
-    id: string;
+    uuid: string;
+    id: string; // Legacy Int ID or FROST ID
     name: string;
     description?: string;
     latitude: number;
@@ -16,4 +25,6 @@ export interface Sensor {
     updated_at?: string;
     latest_data?: SensorDataPoint[];
     station_type?: string;
+    datastreams?: DatastreamMetadata[];
+    properties?: any;
 }

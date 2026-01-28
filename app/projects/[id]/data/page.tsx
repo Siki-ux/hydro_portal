@@ -35,12 +35,6 @@ export default function ProjectDataPage({ params }: PageProps) {
         if (!session?.accessToken || !id) return;
 
         try {
-            // Don't set loading to true for background refreshes to avoid UI flicker
-            // Don't set loading to true for background refreshes to avoid UI flicker
-            // Only set if we have no data
-            // if (sensors.length === 0) setLoading(true);
-            // Removing state usage to break dependency cycle. Using `loading` state logic elsewhere.
-
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
             const res = await fetch(`${apiUrl}/projects/${id}/sensors`, {
                 headers: { Authorization: `Bearer ${session.accessToken}` }
@@ -48,14 +42,21 @@ export default function ProjectDataPage({ params }: PageProps) {
 
             if (res.ok) {
                 const data = await res.json();
-                setSensors(data);
+                // Map API response to match components expected structure
+                const mapped = data.map((t: any) => ({
+                    ...t,
+                    id: t.sensor_uuid || t.thing_id, // Use UUID as ID per user request
+                    uuid: t.sensor_uuid, // Keep UUID reference
+                    status: 'active' // Force active as requested
+                }));
+                setSensors(mapped);
             }
         } catch (err) {
             console.error("Failed to fetch sensors", err);
         } finally {
             setLoading(false);
         }
-    }, [session, id, sensors.length]); // Added sensors.length to avoid stale closure if needed.
+    }, [session, id]);
     // Better to use functional update or ref. But for now, fixing the exhaustive-deps might cause loop.
     // The user comment said "Consider restructuring... perhaps by not checking sensors.length inside".
     // I will keep it simple: The fetchSensors function is called by useEffect.
@@ -306,6 +307,7 @@ export default function ProjectDataPage({ params }: PageProps) {
                 onSubmit={handleAddSensor}
                 mode="create"
                 defaultType={activeTab === "datasets" ? "dataset" : undefined}
+                projectId={id}
             />
 
             {/* Link Modal (Primary for Sensors) */}

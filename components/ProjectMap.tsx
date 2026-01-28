@@ -22,13 +22,45 @@ interface GeoLayer {
 }
 
 // Fetcher for latest sensor data (Single Station)
-const fetchSensorData = async (sensorId: string, token: string) => {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/water-data/data-points?id=${sensorId}&limit=1`, {
-        headers: { Authorization: `Bearer ${token}` }
+const fetchSensorData = async (sensorUuid: string, token: string, datastreams: any[] = []) => {
+    // If no datastreams, try legacy single fetch
+    if (!datastreams || datastreams.length === 0) {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/things/${sensorUuid}/data?limit=1`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error('Failed to fetch data');
+        const data = await res.json();
+        return data; // Returns List[{timestamp, value, datastream, unit}]
+    }
+
+    // Fetch latest observation for each datastream
+    const promises = datastreams.map(async (ds) => {
+        try {
+            const dsName = ds.name;
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/things/${sensorUuid}/datastream/${dsName}/observations?limit=1`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const observations = await res.json();
+                if (observations && observations.length > 0) {
+                    const obs = observations[0];
+                    return {
+                        datastream: dsName,
+                        value: obs.result,
+                        timestamp: obs.phenomenon_time,
+                        unit: ds.unit
+                    };
+                }
+            }
+            return null;
+        } catch (e) {
+            console.error(`Error fetching data for ${ds.name}`, e);
+            return null;
+        }
     });
-    if (!res.ok) throw new Error('Failed to fetch data');
-    const data = await res.json();
-    return data; // Returns List[WaterDataPointResponse]
+
+    const results = await Promise.all(promises);
+    return results.filter(r => r !== null);
 };
 
 export default function ProjectMap({ sensors: initialSensors, projectId, token, className }: ProjectMapProps) {
@@ -72,14 +104,6 @@ export default function ProjectMap({ sensors: initialSensors, projectId, token, 
         staleTime: 60 * 1000,
     });
 
-    // 3. Fetch Single Sensor Data (for Popup)
-    const { data: popupData, isLoading: isPopupLoading } = useQuery({
-        queryKey: ['sensorLatestData', popupSensorId],
-        queryFn: () => fetchSensorData(popupSensorId!, token),
-        enabled: !!popupSensorId,
-        refetchInterval: 30000, // Refresh every 30s while popup is open
-    });
-
     // 4. Determine Displayed Sensors
     // Project Sensor Lookup Map for merging properties (like status)
     const projectSensorMap = useMemo(() => {
@@ -91,20 +115,51 @@ export default function ProjectMap({ sensors: initialSensors, projectId, token, 
         if (!layerSensors) return [];
 
         // Merge Layer Sensors with Project Data
-        // Filter out any sensor that is NOT in the project (i.e. not in projectSensorMap)
+        // If a layer sensor is part of the project, merge its status/local properties.
+        // If not, show it as is (external sensor).
         return layerSensors
-            .filter(s => projectSensorMap.has(String(s.id)))
             .map(s => {
-                const projectSensor = projectSensorMap.get(String(s.id))!;
-                return {
-                    ...s,
-                    status: projectSensor.status,
-                    latest_data: projectSensor.latest_data,
-                    station_type: projectSensor.station_type
-                };
+                let projectSensor = projectSensorMap.get(String(s.id));
+
+                // Fallback: Try to find by UUID if ID match fails (e.g. Int vs String/UUID mismatch)
+                if (!projectSensor && s.uuid) {
+                    projectSensor = initialSensors.find(p => p.uuid === s.uuid);
+                }
+
+                if (projectSensor) {
+                    return {
+                        ...s,
+                        // Priority: Project Sensor Data
+                        id: projectSensor.id, // Use project ID to ensure consistency
+                        uuid: projectSensor.uuid,
+                        status: projectSensor.status,
+                        latest_data: projectSensor.latest_data,
+                        station_type: projectSensor.station_type,
+                        datastreams: projectSensor.datastreams,
+                    };
+                }
+                // External sensor - default to active or unknown?
+                // Per previous request "all sensors to be consider as an active", maybe we force it here too?
+                return { ...s, status: 'active' };
             })
             .filter(s => s.station_type !== 'dataset');
     }, [activeLayer, layerSensors, initialSensors, projectSensorMap]);
+
+    // Find the current popup sensor to look up its datastreams
+    const popupSensor = useMemo(() => {
+        return displayedSensors.find(s => s.uuid === popupSensorId);
+    }, [popupSensorId, displayedSensors]);
+
+    // 3. Fetch Single Sensor Data (for Popup)
+    const { data: popupData, isLoading: isPopupLoading } = useQuery({
+        queryKey: ['sensorLatestData', popupSensorId],
+        queryFn: () => {
+            const ds = popupSensor?.datastreams || [];
+            return fetchSensorData(popupSensorId!, token, ds);
+        },
+        enabled: !!popupSensorId && !!popupSensor,
+        refetchInterval: 30000,
+    });
 
     // --- Helper Functions Definitions (BEFORE useEffect) ---
 
@@ -119,9 +174,12 @@ export default function ProjectMap({ sensors: initialSensors, projectId, token, 
                 },
                 properties: {
                     id: sensor.id,
+                    uuid: sensor.uuid,
                     name: sensor.name,
                     status: sensor.status,
-                    latestData: JSON.stringify(sensor.latest_data || [])
+                    latestData: JSON.stringify(sensor.latest_data || []),
+                    sensorProperties: JSON.stringify(sensor.properties || {}),
+                    datastreams: JSON.stringify(sensor.datastreams || [])
                 }
             }))
         };
@@ -176,43 +234,27 @@ export default function ProjectMap({ sensors: initialSensors, projectId, token, 
             const props = feature.properties;
 
             // Set ID to trigger data fetch
-            setPopupSensorId(String(props?.id));
+            setPopupSensorId(String(props?.uuid));
 
             // Initial Content (Loading or Old Data)
-            const initialData = props?.latestData ? JSON.parse(props.latestData) as any[] : [];
-            const primary = initialData.length > 0 ? initialData[0] : null;
+            // const initialData = props?.latestData ? JSON.parse(props.latestData) as any[] : []; // Unused now
+            const sensorProps = props?.sensorProperties ? JSON.parse(props.sensorProperties) : {};
 
-            // Using !primary to show loading if no data
-            const showLoading = !primary;
-
-            // HTML Construction
-            const valueHTML = `
-                <div id="popup-loading-${props?.id}" class="text-[10px] text-hydro-primary animate-pulse mb-1" style="${!showLoading ? 'display:none' : ''}">Updating data...</div>
-                <div class="flex items-baseline gap-1 mt-3 mb-1">
-                    <span id="popup-val-${props?.id}" class="text-2xl font-bold text-white tracking-tight">
-                        ${primary ? (typeof primary.value === 'number' ? primary.value.toFixed(2) : primary.value) : '--'}
-                    </span>
-                    <span id="popup-unit-${props?.id}" class="text-xs font-medium text-white/50">${primary ? primary.unit : ''}</span>
-                </div>
-                <div id="popup-param-${props?.id}" class="text-[10px] uppercase tracking-wider font-semibold text-hydro-primary mb-2">
-                    ${primary ? primary.parameter : ''}
-                </div>
-                <div class="text-[10px] text-white/30 flex items-center gap-1.5 font-mono">
-                     <span id="popup-time-${props?.id}">${primary ? new Date(primary.timestamp).toLocaleString() : ''}</span>
-                </div>
-            `;
-
+            // Restore missing vars
             const isAlert = props?.status === 'alert';
             const isActive = props?.status === 'active';
             const statusColor = isActive ? 'bg-emerald-500' : (isAlert ? 'bg-amber-500' : 'bg-slate-500');
             const statusGlow = isActive ? 'shadow-[0_0_8px_rgba(16,185,129,0.5)]' : '';
 
+            const datastreams = props?.datastreams ? JSON.parse(props.datastreams) : [];
+            const hasDatastreams = datastreams.length > 0;
+
             const popupContent = `
-                <div class="flex flex-col min-w-[220px] select-none">
+                <div class="flex flex-col min-w-[240px] select-none text-white">
                     <div class="flex items-start justify-between p-4 pb-3 border-b border-white/5 bg-white/[0.02]">
                         <div class="mr-4">
-                            <h3 class="font-bold text-sm text-white leading-tight mb-0.5">${props?.name}</h3>
-                            <div class="text-[10px] text-white/30 font-mono select-all">${props?.id}</div>
+                            <h3 class="font-bold text-sm leading-tight mb-0.5">${props?.name}</h3>
+                            <div class="text-[10px] text-white/30 font-mono select-all">${props?.uuid}</div>
                         </div>
                         <div class="flex items-center pt-1">
                             <span class="relative flex h-2.5 w-2.5">
@@ -221,10 +263,23 @@ export default function ProjectMap({ sensors: initialSensors, projectId, token, 
                             </span>
                         </div>
                     </div>
-                    <div class="p-4 pt-1">
-                        ${valueHTML}
+                    
+                    <div id="popup-content-${props?.uuid}" class="p-4 pt-2 space-y-3 max-h-[200px] overflow-y-auto custom-scrollbar">
+                         ${hasDatastreams ? datastreams.map((ds: any) => `
+                            <div id="popup-row-${props?.uuid}-${ds.name}" class="group">
+                                <div class="flex items-baseline justify-between mb-1">
+                                    <div class="text-[10px] uppercase tracking-wider font-semibold text-hydro-primary">${ds.label || ds.name}</div>
+                                    <div class="text-[10px] text-white/30 font-mono" id="popup-time-${props?.uuid}-${ds.name}">--</div>
+                                </div>
+                                <div class="flex items-baseline gap-1">
+                                    <span id="popup-val-${props?.uuid}-${ds.name}" class="text-xl font-bold tracking-tight text-white animate-pulse">--</span>
+                                    <span class="text-xs font-medium text-white/50">${ds.unit || ''}</span>
+                                </div>
+                            </div>
+                         `).join('<div class="h-px bg-white/5 my-2"></div>') : '<div class="text-sm text-white/50 italic">No datastreams found</div>'}
                     </div>
-                    <button id="popup-btn-${props?.id}"
+
+                    <button id="popup-btn-${props?.uuid}"
                        class="block w-full p-3 text-center text-xs font-semibold text-white/70 bg-white/5 hover:bg-white/10 hover:text-white transition-colors border-t border-white/5 cursor-pointer no-underline group">
                         View Details <span class="inline-block transition-transform group-hover:translate-x-0.5 ml-1">→</span>
                     </button>
@@ -244,11 +299,12 @@ export default function ProjectMap({ sensors: initialSensors, projectId, token, 
             popup.on('close', () => setPopupSensorId(null));
 
             setTimeout(() => {
-                const btn = document.getElementById(`popup-btn-${props?.id}`);
+                const btn = document.getElementById(`popup-btn-${props?.uuid}`);
                 if (btn) {
                     btn.addEventListener('click', () => {
                         const sensor = {
                             id: String(props?.id),
+                            uuid: String(props?.uuid),
                             name: props?.name,
                             latitude: coords[1],
                             longitude: coords[0],
@@ -350,17 +406,19 @@ export default function ProjectMap({ sensors: initialSensors, projectId, token, 
         if (!popupSensorId || !popupData || !map.current) return;
 
         if (popupData.length > 0) {
-            const primary = popupData[0];
-            const valEl = document.getElementById(`popup-val-${popupSensorId}`);
-            const unitEl = document.getElementById(`popup-unit-${popupSensorId}`);
-            const timeEl = document.getElementById(`popup-time-${popupSensorId}`);
-            const paramEl = document.getElementById(`popup-param-${popupSensorId}`);
+            popupData.forEach((data: any) => {
+                const dsName = data.datastream;
+                const valEl = document.getElementById(`popup-val-${popupSensorId}-${dsName}`);
+                const timeEl = document.getElementById(`popup-time-${popupSensorId}-${dsName}`);
 
-            if (valEl) valEl.innerText = typeof primary.value === 'number' ? primary.value.toFixed(2) : String(primary.value);
-            if (unitEl) unitEl.innerText = primary.unit;
-            if (timeEl) timeEl.innerText = new Date(primary.timestamp).toLocaleString();
-            if (paramEl) paramEl.innerText = primary.parameter;
+                if (valEl) {
+                    valEl.innerText = typeof data.value === 'number' ? data.value.toFixed(2) : String(data.value);
+                    valEl.classList.remove('animate-pulse');
+                }
+                if (timeEl) timeEl.innerText = new Date(data.timestamp).toLocaleString();
+            });
 
+            // If we have data, hide any potential global loading state if we had one
             const loadingEl = document.getElementById(`popup-loading-${popupSensorId}`);
             if (loadingEl) loadingEl.style.display = 'none';
         }
